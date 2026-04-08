@@ -1,0 +1,52 @@
+/* All styles are injected dynamically by content.js */
+
+/* ── Netflix ── */
+.player-timedtext-text-container span,
+.player-timedtext span,
+[class*="timedtext"] span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── YouTube ── */
+.ytp-caption-segment,
+.caption-window span,
+.ytp-caption-window-container span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── Bilibili ── */
+.bilibili-player-video-subtitle span,
+.subtitle-item span,
+.bpx-player-subtitle-inner span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── iQIYI ── */
+.iqp-subtitle span,
+.iqp-sub-text,
+[class*="subtitle"] span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── WeTV ── */
+.player-subtitle span,
+.txp_subtitle span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── Youku ── */
+.ykSubtitle span,
+[class*="subtitle-text"] span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── Viki ── */
+.viki-player span[class*="subtitle"],
+.subtitle__text span {
+  font-family: 'HanziPinyin', sans-serif !important;
+}
+
+/* ── Generic fallback — catches most HTML5 video subtitle overlays ── */
+::cue {
+  font-family: 'HanziPinyin', sans-serif !important;
+}

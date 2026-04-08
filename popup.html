@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: sans-serif; width: 230px; padding: 14px;
+      margin: 0; background: #1a1a2e; color: #eee;
+    }
+    h2 { font-size: 14px; margin: 0 0 12px; color: #f0c040; }
+    p  { font-size: 12px; color: #999; margin: 0 0 12px; line-height: 1.5; }
+    .row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #2a2a4e; border-radius: 6px; padding: 8px 10px;
+      margin-bottom: 8px;
+    }
+    .row label { font-size: 12px; cursor: pointer; }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; background: #444;
+      border-radius: 20px; cursor: pointer; transition: .2s;
+    }
+    .slider:before {
+      content: ''; position: absolute;
+      width: 14px; height: 14px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: .2s;
+    }
+    input:checked + .slider { background: #f0c040; }
+    input:checked + .slider:before { transform: translateX(16px); }
+    .note { font-size: 11px; color: #777; margin-top: 10px; }
+    a { color: #f0c040; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h2>汉字 Pinyin Subtitles</h2>
+  <p>Renders Chinese subtitles using the Hanzi Pinyin font.</p>
+  <div class="row">
+    <label for="dual">Show English translation below</label>
+    <label class="toggle">
+      <input type="checkbox" id="dual">
+      <span class="slider"></span>
+    </label>
+  </div>
+  <p class="note">Enable both Chinese and English subtitles in YouTube/Bilibili's subtitle menu first, then toggle this on.</p>
+  <a href="https://github.com/parlr/hanzi-pinyin-font" target="_blank">About the font ↗</a>
+  <script src="popup.js"></script>
+</body>
+</html>

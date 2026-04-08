@@ -1,0 +1,31 @@
+{
+  "manifest_version": 2,
+  "name": "Hanzi Pinyin Subtitles",
+  "version": "3.0",
+  "description": "Chinese subtitles in Hanzi Pinyin font with optional English below",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.bilibili.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Hanzi Pinyin Subtitles"
+  },
+  "web_accessible_resources": [
+    "fonts/Hanzi-Pinyin-Font.top.woff2",
+    "fonts/Hanzi-Pinyin-Font.top.ttf"
+  ]
+}
