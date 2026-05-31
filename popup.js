@@ -2,9 +2,9 @@ const dual = document.getElementById('dual');
 const zhSel = document.getElementById('zh-track');
 const enSel = document.getElementById('en-track');
 const fontScaleInput = document.getElementById('font-scale');
-const fontScaleVal   = document.getElementById('font-scale-val');
-const subPosInput    = document.getElementById('sub-position');
-const subPosVal      = document.getElementById('sub-position-val');
+const fontScaleVal = document.getElementById('font-scale-val');
+const subPosInput = document.getElementById('sub-position');
+const subPosVal = document.getElementById('sub-position-val');
 
 browser.storage.local.get({ dualEnable: true, availableTracks: [], zhTrack: '', enTrack: '', fontScale: 100, subPosition: 8 }).then(s => {
   dual.checked = s.dualEnable;
@@ -24,14 +24,26 @@ function populateTracks(tracks, zhTrack, enTrack) {
     return;
   }
 
+  // Add an "Off" option at the top of each dropdown
+  [zhSel, enSel].forEach(sel => {
+    sel.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'Off' }));
+  });
+
   tracks.forEach(t => {
     zhSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
     enSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
   });
 
   // Use saved selection, or fall back to best Chinese / English match
-  zhSel.value = zhTrack || tracks.find(t => (t.languageCode || '').startsWith('zh'))?.languageCode || '';
-  enSel.value = enTrack || tracks.find(t => (t.languageCode || '').startsWith('en'))?.languageCode || '';
+  const newZh = zhTrack || tracks.find(t => (t.languageCode || '').startsWith('zh'))?.languageCode || '';
+  const newEn = enTrack || tracks.find(t => (t.languageCode || '').startsWith('en'))?.languageCode || '';
+
+  zhSel.value = newZh;
+  enSel.value = newEn;
+
+  // Persist whatever value was just resolved — previously this was never saved,
+  // so storage stayed as '' even though the dropdown showed a track.
+  browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
 }
 
 dual.addEventListener('change', () => browser.storage.local.set({ dualEnable: dual.checked }));

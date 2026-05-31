@@ -1,20 +1,10 @@
 /**
  * background.js
- * Watches network requests for subtitle file URLs on YouTube and Bilibili,
- * then forwards them to the content script so it can fetch and parse them.
  */
-
-const SUBTITLE_PATTERNS = [
-  // YouTube timedtext API
-  { urls: ['*://*.youtube.com/api/timedtext*'] },
-  // Bilibili subtitle JSON
-  { urls: ['*://*.bilivideo.com/*.json*', '*://*.bilibili.com/*/subtitle*'] },
-];
 
 function guessLang(url) {
   const m = url.match(/[?&]lang=([^&]+)/i)
-    || url.match(/[?&]tlang=([^&]+)/i)
-    || url.match(/_(zh|en|zh-Hans|zh-CN|zh-TW|zh-Hant)[\._]/i);
+    || url.match(/[?&]tlang=([^&]+)/i);
   if (!m) return 'unknown';
   const l = m[1].toLowerCase();
   if (l.startsWith('zh')) return 'zh';
@@ -22,27 +12,58 @@ function guessLang(url) {
   return l;
 }
 
-// Content scripts can't fetch cross-origin URLs without CORS. They send the URL
-// here and we fetch it from the background where host permissions apply.
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Generic cross-origin fetch proxy
   if (msg.type === 'fetch-text' && msg.url) {
     fetch(msg.url)
       .then(r => r.text())
       .then(text => sendResponse({ ok: true, text }))
       .catch(() => sendResponse({ ok: false, text: '' }));
-    return true; // keep channel open for async response
+    return true;
+  }
+
+  // Proactive subtitle fetch — content.js sends the exact player URLs
+  if (msg.type === 'fetch-subtitles') {
+    const { videoId, zhTrack, enTrack, tracks } = msg;
+    const tabId = sender.tab?.id;
+    if (!tabId) { sendResponse({ ok: false }); return; }
+
+    const fetchAndForward = async (langCode, slot) => {
+      if (!langCode) return;
+      const url = tracks?.[langCode];
+      if (!url) {
+        console.log(`[HPF bg] no URL for lang ${langCode} — available:`, Object.keys(tracks || {}));
+        return;
+      }
+      console.log(`[HPF bg] fetching ${slot} (${langCode}):`, url.slice(0, 120));
+      try {
+        const r = await fetch(url);
+        const text = await r.text();
+        console.log(`[HPF bg] ${slot} status:`, r.status, 'length:', text.length);
+        if (!r.ok || !text) return;
+        browser.tabs.sendMessage(tabId, { type: 'subtitle-url', url, lang: slot }).catch(() => { });
+      } catch (err) {
+        console.log(`[HPF bg] ${slot} exception:`, err);
+      }
+    };
+
+    Promise.all([
+      fetchAndForward(zhTrack, 'zh'),
+      fetchAndForward(enTrack, 'en'),
+    ]).then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    return true;
   }
 });
 
+// Passive intercept — still useful if CC is already on
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     const { url, tabId } = details;
     if (tabId < 0) return;
     const lang = guessLang(url);
-    // Send the URL to the content script in that tab
-    browser.tabs.sendMessage(tabId, { type: 'subtitle-url', url, lang })
-      .catch(() => { }); // tab may not have content script yet — ignore
+    if (lang === 'zh' || lang === 'en') {
+      browser.tabs.sendMessage(tabId, { type: 'subtitle-url', url, lang }).catch(() => { });
+    }
   },
-  // Merge all URL patterns into one listener
-  { urls: SUBTITLE_PATTERNS.flatMap(p => p.urls) }
+  { urls: ['*://*.youtube.com/api/timedtext*', '*://*.bilivideo.com/*.json*'] }
 );
