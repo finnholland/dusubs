@@ -5,8 +5,16 @@
   "description": "Chinese subtitles in Hanzi Pinyin font with optional English below",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "webRequest",
+    "*://*.youtube.com/*",
+    "*://*.bilibili.com/*",
+    "*://*.bilivideo.com/*"
   ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
   "content_scripts": [
     {
       "matches": [
