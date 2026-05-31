@@ -31,6 +31,11 @@
     input:checked + .slider:before { transform: translateX(16px); }
     .note { font-size: 11px; color: #777; margin-top: 10px; }
     a { color: #f0c040; font-size: 11px; }
+    .track-select {
+      background: #1a1a2e; color: #eee; border: 1px solid #555;
+      border-radius: 4px; padding: 2px 4px; font-size: 11px;
+      max-width: 120px;
+    }
   </style>
 </head>
 <body>
@@ -43,7 +48,17 @@
       <span class="slider"></span>
     </label>
   </div>
-  <p class="note">Enable both Chinese and English subtitles in YouTube/Bilibili's subtitle menu first, then toggle this on.</p>
+  <div class="row" style="flex-direction:column;align-items:stretch;gap:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <label for="zh-track" style="font-size:12px;">Top track (Chinese)</label>
+      <select id="zh-track" class="track-select"></select>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <label for="en-track" style="font-size:12px;">Bottom track (English)</label>
+      <select id="en-track" class="track-select"></select>
+    </div>
+  </div>
+  <p class="note">Enable subtitles in YouTube's CC menu first so tracks appear above, then select which goes on top/bottom.</p>
   <a href="https://github.com/parlr/hanzi-pinyin-font" target="_blank">About the font ↗</a>
   <script src="popup.js"></script>
 </body>
