@@ -34,13 +34,13 @@
     }
     .hpf-zh {
       font-family: 'HanziPinyin', sans-serif !important;
-      font-size: clamp(32px, 3.5vw, 60px);
+      font-size: var(--hpf-zh-size, 40px);
       color: #fff;
       line-height: 2.6;
     }
     .hpf-en {
       font-family: Arial, sans-serif;
-      font-size: clamp(18px, 2vw, 32px);
+      font-size: var(--hpf-en-size, 22px);
       color: #ffe97a;
       line-height: 1.5;
     }
@@ -96,9 +96,19 @@
     attachOverlay();
     let zh = '', en = '';
 
-    // YouTube: each caption window is a direct child div of the container.
-    // Sort by language so order doesn't matter (user may have added tracks either way).
-    for (const win of document.querySelectorAll('.ytp-caption-window-container > div')) {
+    // Mirror YouTube's user-configured subtitle font size.
+    const sample = document.querySelector('.ytp-caption-window-container .ytp-caption-segment');
+    if (sample) {
+      const sz = parseFloat(getComputedStyle(sample).fontSize);
+      if (sz) {
+        root.style.setProperty('--hpf-zh-size', sz + 'px');
+        root.style.setProperty('--hpf-en-size', Math.round(sz * 0.6) + 'px');
+      }
+    }
+
+    // YouTube: caption windows have class "caption-window" and may be nested
+    // inside the container, not necessarily direct children.
+    for (const win of document.querySelectorAll('.ytp-caption-window-container .caption-window')) {
       const text = [...win.querySelectorAll('.ytp-caption-segment')]
         .map(el => el.textContent.trim()).filter(Boolean).join(' ');
       if (!text) continue;
