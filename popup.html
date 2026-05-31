@@ -36,6 +36,15 @@
       border-radius: 4px; padding: 2px 4px; font-size: 11px;
       max-width: 120px;
     }
+    .range-row {
+      flex-direction: column; align-items: stretch; gap: 4px;
+    }
+    .range-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .range-header label { font-size: 12px; }
+    .range-header span { font-size: 12px; color: #f0c040; min-width: 36px; text-align: right; }
+    input[type=range] { width: 100%; accent-color: #f0c040; margin: 0; }
   </style>
 </head>
 <body>
@@ -57,6 +66,20 @@
       <label for="en-track" style="font-size:12px;">Bottom track (English)</label>
       <select id="en-track" class="track-select"></select>
     </div>
+  </div>
+  <div class="row range-row">
+    <div class="range-header">
+      <label for="font-scale">Font size</label>
+      <span id="font-scale-val">100%</span>
+    </div>
+    <input type="range" id="font-scale" min="50" max="200" step="5" value="100">
+  </div>
+  <div class="row range-row">
+    <div class="range-header">
+      <label for="sub-position">Vertical position</label>
+      <span id="sub-position-val">8%</span>
+    </div>
+    <input type="range" id="sub-position" min="0" max="40" step="1" value="8">
   </div>
   <p class="note">Enable subtitles in YouTube's CC menu first so tracks appear above, then select which goes on top/bottom.</p>
   <a href="https://github.com/parlr/hanzi-pinyin-font" target="_blank">About the font ↗</a>

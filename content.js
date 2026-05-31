@@ -13,36 +13,35 @@
     }
     #hpf-root {
       position: fixed;
-      bottom: 10%;
-      left: 50%;
-      transform: translateX(-50%);
       z-index: 2147483647;
       pointer-events: none;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
-      width: 90vw;
+      gap: 20px;
+      transform: translateX(-50%);
     }
     .hpf-box {
-      display: inline-block;
-      background: rgba(0,0,0,0.82);
-      border-radius: 5px;
-      padding: 4px 18px 2px;
+      width: max-content;
       max-width: 100%;
       text-align: center;
+      flex-shrink: 0;
     }
     .hpf-zh {
       font-family: 'HanziPinyin', sans-serif !important;
-      font-size: var(--hpf-zh-size, 40px);
+      font-size: var(--hpf-zh-size, 80px);
       color: #fff;
       line-height: 2.6;
+      -webkit-text-stroke: 3px black;
+      paint-order: stroke fill;
     }
     .hpf-en {
       font-family: Arial, sans-serif;
-      font-size: var(--hpf-en-size, 22px);
+      font-size: var(--hpf-en-size, 44px);
       color: #ffe97a;
       line-height: 1.5;
+      -webkit-text-stroke: 2px black;
+      paint-order: stroke fill;
     }
   `;
   document.head.appendChild(style);
@@ -64,11 +63,13 @@
   else document.addEventListener('DOMContentLoaded', attachOverlay);
 
   // ── Settings ───────────────────────────────────────────────────────────────
-  let cfg = { dualEnable: true };
-  browser.storage.local.get({ dualEnable: true }).then(s => { cfg = s; applyVisibility(); });
+  let cfg = { dualEnable: true, fontScale: 100, subPosition: 8 };
+  browser.storage.local.get({ dualEnable: true, fontScale: 100, subPosition: 8 }).then(s => { cfg = s; applyVisibility(); });
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if ('dualEnable' in changes) cfg.dualEnable = changes.dualEnable.newValue;
+    if ('fontScale' in changes) cfg.fontScale = changes.fontScale.newValue;
+    if ('subPosition' in changes) cfg.subPosition = changes.subPosition.newValue;
     applyVisibility();
     if ('zhTrack' in changes || 'enTrack' in changes) {
       cues.zh = []; cues.en = [];
@@ -115,8 +116,8 @@
           .filter(e => e.segs)
           .map(e => ({
             start: e.tStartMs / 1000,
-            end:   (e.tStartMs + (e.dDurationMs || 0)) / 1000,
-            text:  e.segs.map(s => s.utf8 || '').join('').trim(),
+            end: (e.tStartMs + (e.dDurationMs || 0)) / 1000,
+            text: e.segs.map(s => s.utf8 || '').join('').trim(),
           }))
           .filter(c => c.text);
       } catch (_) {
@@ -124,12 +125,12 @@
         const doc = new DOMParser().parseFromString(text, 'text/xml');
         parsed = [...doc.querySelectorAll('text')].map(el => ({
           start: parseFloat(el.getAttribute('start')),
-          end:   parseFloat(el.getAttribute('start')) + parseFloat(el.getAttribute('dur') || 0),
-          text:  el.textContent.trim(),
+          end: parseFloat(el.getAttribute('start')) + parseFloat(el.getAttribute('dur') || 0),
+          text: el.textContent.trim(),
         })).filter(c => c.text);
       }
       if (parsed.length) cues[lang] = parsed;
-    } catch (_) {}
+    } catch (_) { }
   }
 
   browser.runtime.onMessage.addListener((msg) => {
@@ -153,7 +154,7 @@
         if (text[i] === '[') depth++;
         else if (text[i] === ']') { if (--depth === 0) break; }
       }
-      try { return JSON.parse(text.slice(arrStart, i + 1)); } catch (_) {}
+      try { return JSON.parse(text.slice(arrStart, i + 1)); } catch (_) { }
     }
     return [];
   }
@@ -167,7 +168,7 @@
     try {
       tracks = window.wrappedJSObject?.ytInitialPlayerResponse
         ?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-    } catch (_) {}
+    } catch (_) { }
     if (!tracks.length) tracks = getTracksFromPageData();
 
     browser.storage.local.set({
@@ -203,20 +204,33 @@
     attachOverlay();
     let zh = '', en = '';
 
-    // Mirror YouTube's user-configured subtitle font size.
+    // Mirror YouTube's user-configured subtitle font size, then apply user scale.
     const sample = document.querySelector('.ytp-caption-window-container .ytp-caption-segment');
+    let baseSz = 40;
     if (sample) {
       const sz = parseFloat(getComputedStyle(sample).fontSize);
-      if (sz) {
-        root.style.setProperty('--hpf-zh-size', sz + 'px');
-        root.style.setProperty('--hpf-en-size', Math.round(sz * 0.6) + 'px');
-      }
+      if (sz) baseSz = sz;
     }
+    const scale = (cfg.fontScale || 100) / 100;
+    const zhSz = Math.round(baseSz * scale);
+    root.style.setProperty('--hpf-zh-size', zhSz + 'px');
+    root.style.setProperty('--hpf-en-size', Math.round(zhSz * 0.6) + 'px');
+    // The zh line-height (2.6) leaves ~1.1× the font size as dead space below the
+    // visible glyph. Pull en up to close that gap.
+    enBox.style.marginTop = -Math.round(zhSz * 1.1) + 'px';
 
     // YouTube: look up current subtitle cues by video time.
     // DOM scraping (.caption-window) won't work because YouTube only renders
     // one track at a time. We fetch both tracks directly via background.js.
     const video = document.querySelector('video');
+
+    // Position overlay relative to the video frame, not the window.
+    if (video) {
+      const r = video.getBoundingClientRect();
+      root.style.left = (r.left + r.width / 2) + 'px';
+      root.style.bottom = (window.innerHeight - r.bottom + r.height * (cfg.subPosition || 8) / 100) + 'px';
+      root.style.maxWidth = (r.width * 0.9) + 'px';
+    }
     const t = video ? video.currentTime : -1;
     const findCue = (lang) => cues[lang].find(c => t >= c.start && t < c.end)?.text || '';
     zh = findCue('zh');
