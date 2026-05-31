@@ -64,12 +64,16 @@
   else document.addEventListener('DOMContentLoaded', attachOverlay);
 
   // ── Settings ───────────────────────────────────────────────────────────────
-  let cfg = { dualEnable: false };
-  browser.storage.sync.get({ dualEnable: false }).then(s => { cfg = s; applyVisibility(); });
+  let cfg = { dualEnable: true };
+  browser.storage.local.get({ dualEnable: true }).then(s => { cfg = s; applyVisibility(); });
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync') return;
+    if (area !== 'local') return;
     if ('dualEnable' in changes) cfg.dualEnable = changes.dualEnable.newValue;
     applyVisibility();
+    if ('zhTrack' in changes || 'enTrack' in changes) {
+      cues.zh = []; cues.en = [];
+      loadSubtitles();
+    }
   });
 
   function applyVisibility() {
@@ -89,6 +93,87 @@
       .join(' ');
   }
 
+  // ── Subtitle track cues (fetched directly from YouTube's timedtext API) ─────
+  const cues = { zh: [], en: [] };
+
+  async function fetchSubtitle(lang, url) {
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      let parsed = [];
+      try {
+        // json3 format (used by YouTube for ASR/auto-generated and modern manual tracks)
+        const data = JSON.parse(text);
+        parsed = (data.events || [])
+          .filter(e => e.segs)
+          .map(e => ({
+            start: e.tStartMs / 1000,
+            end:   (e.tStartMs + (e.dDurationMs || 0)) / 1000,
+            text:  e.segs.map(s => s.utf8 || '').join('').trim(),
+          }))
+          .filter(c => c.text);
+      } catch (_) {
+        // srv1 XML fallback: <transcript><text start dur>…</text></transcript>
+        const doc = new DOMParser().parseFromString(text, 'text/xml');
+        parsed = [...doc.querySelectorAll('text')].map(el => ({
+          start: parseFloat(el.getAttribute('start')),
+          end:   parseFloat(el.getAttribute('start')) + parseFloat(el.getAttribute('dur') || 0),
+          text:  el.textContent.trim(),
+        })).filter(c => c.text);
+      }
+      if (parsed.length) cues[lang] = parsed;
+    } catch (_) {}
+  }
+
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'subtitle-url' && (msg.lang === 'zh' || msg.lang === 'en')) {
+      fetchSubtitle(msg.lang, msg.url);
+    }
+  });
+
+  // Fetch both subtitle tracks via YouTube's public timedtext API.
+  // Uses unsigned URLs (constructed from video ID) which have permissive CORS
+  // headers, avoiding the CORS failures that happen with the signed baseUrls
+  // stored in ytInitialPlayerResponse. Language codes are read from page data
+  // when available so we request the exact track (e.g. zh-Hans vs zh-TW).
+  async function loadSubtitles() {
+    const videoId = new URLSearchParams(location.search).get('v');
+    if (!videoId) return;
+    let zhLang = 'zh-Hans', enLang = 'en';
+    let tracks = [];
+    try {
+      tracks = window.wrappedJSObject?.ytInitialPlayerResponse
+        ?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+      const zhAuto = tracks.find(t => (t.languageCode || '').startsWith('zh'));
+      const enAuto = tracks.find(t => (t.languageCode || '').startsWith('en'));
+      if (zhAuto?.languageCode) zhLang = zhAuto.languageCode;
+      if (enAuto?.languageCode) enLang = enAuto.languageCode;
+    } catch (_) {}
+
+    browser.storage.local.set({
+      availableTracks: tracks.map(t => ({
+        languageCode: t.languageCode,
+        name: t.name?.simpleText || t.languageCode,
+      })),
+    });
+
+    const sel = await browser.storage.local.get({ zhTrack: '', enTrack: '' });
+    const resolvedZhLang = sel.zhTrack || zhLang;
+    const resolvedEnLang = sel.enTrack || enLang;
+
+    const base = `https://www.youtube.com/api/timedtext?v=${encodeURIComponent(videoId)}&fmt=json3&lang=`;
+    await Promise.all([
+      fetchSubtitle('zh', base + encodeURIComponent(resolvedZhLang)),
+      fetchSubtitle('en', base + encodeURIComponent(resolvedEnLang)),
+    ]);
+  }
+
+  loadSubtitles();
+  window.addEventListener('yt-navigate-finish', () => {
+    cues.zh = []; cues.en = [];
+    loadSubtitles();
+  });
+
   let lastZh = '', lastEn = '';
 
   // ── Main loop ──────────────────────────────────────────────────────────────
@@ -106,15 +191,14 @@
       }
     }
 
-    // YouTube: caption windows have class "caption-window" and may be nested
-    // inside the container, not necessarily direct children.
-    for (const win of document.querySelectorAll('.ytp-caption-window-container .caption-window')) {
-      const text = [...win.querySelectorAll('.ytp-caption-segment')]
-        .map(el => el.textContent.trim()).filter(Boolean).join(' ');
-      if (!text) continue;
-      if (isChinese(text)) zh = text;
-      else en = text;
-    }
+    // YouTube: look up current subtitle cues by video time.
+    // DOM scraping (.caption-window) won't work because YouTube only renders
+    // one track at a time. We fetch both tracks directly via background.js.
+    const video = document.querySelector('video');
+    const t = video ? video.currentTime : -1;
+    const findCue = (lang) => cues[lang].find(c => t >= c.start && t < c.end)?.text || '';
+    zh = findCue('zh');
+    en = findCue('en');
 
     // Bilibili fallback
     if (!zh) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
@@ -123,7 +207,7 @@
     if (zh !== lastZh) { lastZh = zh; zhBox.textContent = zh; }
     if (en !== lastEn) { lastEn = en; enBox.textContent = en; }
     zhBox.style.display = zh ? '' : 'none';
-    enBox.style.display = (en && cfg.dualEnable) ? '' : 'none';
+    enBox.style.display = (cfg.dualEnable && en) ? '' : 'none';
   }
 
   setInterval(tick, 80);
