@@ -22,6 +22,18 @@ function guessLang(url) {
   return l;
 }
 
+// Content scripts can't fetch cross-origin URLs without CORS. They send the URL
+// here and we fetch it from the background where host permissions apply.
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'fetch-text' && msg.url) {
+    fetch(msg.url)
+      .then(r => r.text())
+      .then(text => sendResponse({ ok: true, text }))
+      .catch(() => sendResponse({ ok: false, text: '' }));
+    return true; // keep channel open for async response
+  }
+});
+
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     const { url, tabId } = details;

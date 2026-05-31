@@ -8,13 +8,22 @@ browser.storage.local.get({ dualEnable: true, availableTracks: [], zhTrack: '', 
 });
 
 function populateTracks(tracks, zhTrack, enTrack) {
-  [zhSel, enSel].forEach(sel => { sel.innerHTML = '<option value="">Auto-detect</option>'; });
+  [zhSel, enSel].forEach(sel => { sel.innerHTML = ''; });
+
+  if (!tracks.length) {
+    const msg = '<option value="" disabled selected>Open a YouTube video with subtitles</option>';
+    zhSel.innerHTML = enSel.innerHTML = msg;
+    return;
+  }
+
   tracks.forEach(t => {
     zhSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
     enSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
   });
-  zhSel.value = zhTrack;
-  enSel.value = enTrack;
+
+  // Use saved selection, or fall back to best Chinese / English match
+  zhSel.value = zhTrack || tracks.find(t => (t.languageCode || '').startsWith('zh'))?.languageCode || '';
+  enSel.value = enTrack || tracks.find(t => (t.languageCode || '').startsWith('en'))?.languageCode || '';
 }
 
 dual.addEventListener('change', () => browser.storage.local.set({ dualEnable: dual.checked }));

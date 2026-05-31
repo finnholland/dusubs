@@ -98,8 +98,15 @@
 
   async function fetchSubtitle(lang, url) {
     try {
-      const res = await fetch(url);
-      const text = await res.text();
+      let text;
+      if (url.startsWith('data:')) {
+        const comma = url.indexOf(',');
+        text = url.includes(';base64,') ? atob(url.slice(comma + 1)) : decodeURIComponent(url.slice(comma + 1));
+      } else {
+        const resp = await browser.runtime.sendMessage({ type: 'fetch-text', url });
+        if (!resp?.ok) return;
+        text = resp.text;
+      }
       let parsed = [];
       try {
         // json3 format (used by YouTube for ASR/auto-generated and modern manual tracks)
@@ -131,24 +138,37 @@
     }
   });
 
-  // Fetch both subtitle tracks via YouTube's public timedtext API.
-  // Uses unsigned URLs (constructed from video ID) which have permissive CORS
-  // headers, avoiding the CORS failures that happen with the signed baseUrls
-  // stored in ytInitialPlayerResponse. Language codes are read from page data
-  // when available so we request the exact track (e.g. zh-Hans vs zh-TW).
+  // Parse captionTracks from YouTube's inline JSON embedded in the page HTML.
+  // wrappedJSObject is unreliable because YouTube removes ytInitialPlayerResponse
+  // from window after the player initialises. The embedded script tag is permanent.
+  function getTracksFromPageData() {
+    for (const script of document.querySelectorAll('script:not([src])')) {
+      const text = script.textContent;
+      const idx = text.indexOf('"captionTracks":');
+      if (idx === -1) continue;
+      const arrStart = text.indexOf('[', idx);
+      if (arrStart === -1) continue;
+      let depth = 0, i = arrStart;
+      for (; i < text.length; i++) {
+        if (text[i] === '[') depth++;
+        else if (text[i] === ']') { if (--depth === 0) break; }
+      }
+      try { return JSON.parse(text.slice(arrStart, i + 1)); } catch (_) {}
+    }
+    return [];
+  }
+
   async function loadSubtitles() {
     const videoId = new URLSearchParams(location.search).get('v');
     if (!videoId) return;
-    let zhLang = 'zh-Hans', enLang = 'en';
+
+    // Get full track list; wrappedJSObject is the fast path, HTML parsing is the fallback.
     let tracks = [];
     try {
       tracks = window.wrappedJSObject?.ytInitialPlayerResponse
         ?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-      const zhAuto = tracks.find(t => (t.languageCode || '').startsWith('zh'));
-      const enAuto = tracks.find(t => (t.languageCode || '').startsWith('en'));
-      if (zhAuto?.languageCode) zhLang = zhAuto.languageCode;
-      if (enAuto?.languageCode) enLang = enAuto.languageCode;
     } catch (_) {}
+    if (!tracks.length) tracks = getTracksFromPageData();
 
     browser.storage.local.set({
       availableTracks: tracks.map(t => ({
@@ -158,14 +178,16 @@
     });
 
     const sel = await browser.storage.local.get({ zhTrack: '', enTrack: '' });
-    const resolvedZhLang = sel.zhTrack || zhLang;
-    const resolvedEnLang = sel.enTrack || enLang;
+    const zhTrack = tracks.find(t => t.languageCode === sel.zhTrack)
+      || tracks.find(t => (t.languageCode || '').startsWith('zh'));
+    const enTrack = tracks.find(t => t.languageCode === sel.enTrack)
+      || tracks.find(t => (t.languageCode || '').startsWith('en'));
 
     const base = `https://www.youtube.com/api/timedtext?v=${encodeURIComponent(videoId)}&fmt=json3&lang=`;
     await Promise.all([
-      fetchSubtitle('zh', base + encodeURIComponent(resolvedZhLang)),
-      fetchSubtitle('en', base + encodeURIComponent(resolvedEnLang)),
-    ]);
+      zhTrack && fetchSubtitle('zh', zhTrack.baseUrl || base + encodeURIComponent(zhTrack.languageCode)),
+      enTrack && fetchSubtitle('en', enTrack.baseUrl || base + encodeURIComponent(enTrack.languageCode)),
+    ].filter(Boolean));
   }
 
   loadSubtitles();
