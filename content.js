@@ -2,7 +2,7 @@
 
 /**
  * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
- *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean }} Config
+ *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean, showPinyin: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -12,16 +12,8 @@
   const CHANNEL = 'hpf-main-isolated';
   const LOG = (...a) => console.log('[HPF]', ...a);
 
-  const FONT_WOFF2 = browser.runtime.getURL('fonts/Hanzi-Pinyin-Font.top.woff2');
-  const FONT_TTF = browser.runtime.getURL('fonts/Hanzi-Pinyin-Font.top.ttf');
-
   const styleEl = document.createElement('style');
   styleEl.textContent = `
-    @font-face {
-      font-family: 'HanziPinyin';
-      src: url('${FONT_WOFF2}') format('woff2'),
-           url('${FONT_TTF}') format('truetype');
-    }
     #hpf-root {
       position: fixed;
       z-index: 2147483647;
@@ -36,6 +28,16 @@
       max-width: 100%;
       text-align: center;
       flex-shrink: 0;
+    }
+    .hpf-box ruby {
+      letter-spacing: 0;
+      margin-right: 0.15em;
+    }
+    .hpf-box rt {
+      font-family: Arial, sans-serif;
+      font-size: 0.45em;
+      line-height: 1.2;
+      letter-spacing: 0;
     }
   `;
   document.head.appendChild(styleEl);
@@ -58,7 +60,7 @@
     fontScale: 100, subPosition: 8,
     zhTrack: '', enTrack: '',
     zhColor: '#ffffff', enColor: '#ffe97a',
-    stroke: true, window: false, shadow: false,
+    stroke: true, window: false, shadow: false, showPinyin: true,
   };
 
   /** @type {Config} */
@@ -91,17 +93,18 @@
     let baseSz = 40;
     if (sample) { const sz = parseFloat(getComputedStyle(sample).fontSize); if (sz) baseSz = sz; }
     const zhSz = Math.round(baseSz * scale);
-    const enSz = Math.round(zhSz * 0.6);
+    const enSz = Math.round(zhSz * 0.8);
 
     const stroke = cfg.stroke ? '3px #000' : '0px #000';
     const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
     const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
 
     zhBox.style.cssText = `
-      font-family: 'HanziPinyin', sans-serif;
+      font-family: sans-serif;
       font-size: ${zhSz}px;
       color: ${cfg.zhColor};
-      line-height: 1.3;
+      line-height: ${cfg.showPinyin ? 'normal' : '1.3'};
+      letter-spacing: 0.25em;
       -webkit-text-stroke: ${stroke};
       paint-order: stroke fill;
       text-shadow: ${shadow};
@@ -204,8 +207,32 @@
     }
   }
 
+  // ── Ruby rendering ─────────────────────────────────────────────────────────
+  /** @param {string} s @returns {string} */
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** @param {string} text @returns {string} */
+  function renderRuby(text) {
+    if (!text) return '';
+    const lib = /** @type {any} */ (globalThis.pinyinPro);
+    if (!lib) return escapeHtml(text);
+    const chars = [...text];
+    const pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
+    if (pinyinArr.length !== chars.length) return escapeHtml(text);
+    return chars.map((char, i) => {
+      const py = pinyinArr[i] || '';
+      const escaped = escapeHtml(char);
+      if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
+        return `<ruby>${escaped}<rt>${py}</rt></ruby>`;
+      }
+      return escaped;
+    }).join('');
+  }
+
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1;
+  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null);
 
   function tick() {
     attachOverlay();
@@ -233,7 +260,14 @@
     if (cfg.zhTrack && !zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
     if (cfg.enTrack && !en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
-    if (zh !== lastZh) { lastZh = zh; zhBox.textContent = zh; }
+    const showPinyinChanged = cfg.showPinyin !== lastShowPinyin;
+    if (showPinyinChanged) lastShowPinyin = cfg.showPinyin;
+
+    if (zh !== lastZh || showPinyinChanged) {
+      lastZh = zh;
+      if (cfg.showPinyin) zhBox.innerHTML = renderRuby(zh);
+      else zhBox.textContent = zh;
+    }
     if (en !== lastEn) { lastEn = en; enBox.textContent = en; }
 
     zhBox.style.display = zh ? '' : 'none';

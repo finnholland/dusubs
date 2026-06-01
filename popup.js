@@ -14,15 +14,16 @@ const fontScaleIn = document.getElementById('font-scale');
 const fontScaleVal = document.getElementById('font-scale-val');
 const subPosIn = document.getElementById('sub-position');
 const subPosVal = document.getElementById('sub-position-val');
-const togStroke = document.getElementById('tog-stroke');
-const togWindow = document.getElementById('tog-window');
-const togShadow = document.getElementById('tog-shadow');
+const togPinyin = /** @type {HTMLInputElement} */ (document.getElementById('tog-pinyin'));
+const togStroke = /** @type {HTMLInputElement} */ (document.getElementById('tog-stroke'));
+const togWindow = /** @type {HTMLInputElement} */ (document.getElementById('tog-window'));
+const togShadow = /** @type {HTMLInputElement} */ (document.getElementById('tog-shadow'));
 
 const DEFAULTS = {
   fontScale: 100, subPosition: 8,
   zhTrack: '', enTrack: '',
   zhColor: '#ffffff', enColor: '#ffe97a',
-  stroke: true, window: false, shadow: false,
+  stroke: true, window: false, shadow: false, showPinyin: true,
 };
 
 /**
@@ -42,6 +43,7 @@ browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(s => {
   enColorSel.value = s.enColor;
   updateSwatch(zhSwatch, s.zhColor);
   updateSwatch(enSwatch, s.enColor);
+  togPinyin.checked = s.showPinyin;
   togStroke.checked = s.stroke;
   togWindow.checked = s.window;
   togShadow.checked = s.shadow;
@@ -98,6 +100,7 @@ subPosIn.addEventListener('input', () => {
   browser.storage.local.set({ subPosition: Number(subPosIn.value) });
 });
 
+togPinyin.addEventListener('change', () => browser.storage.local.set({ showPinyin: togPinyin.checked }));
 togStroke.addEventListener('change', () => browser.storage.local.set({ stroke: togStroke.checked }));
 togWindow.addEventListener('change', () => browser.storage.local.set({ window: togWindow.checked }));
 togShadow.addEventListener('change', () => browser.storage.local.set({ shadow: togShadow.checked }));
