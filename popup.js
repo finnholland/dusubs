@@ -1,3 +1,9 @@
+// @ts-check
+
+/**
+ * @typedef {{ languageCode: string, name: string }} Track
+ */
+
 const zhSel = document.getElementById('zh-track');
 const enSel = document.getElementById('en-track');
 const zhColorSel = document.getElementById('zh-color');
@@ -19,6 +25,10 @@ const DEFAULTS = {
   stroke: true, window: false, shadow: false,
 };
 
+/**
+ * @param {HTMLElement} swatchEl
+ * @param {string} color
+ */
 function updateSwatch(swatchEl, color) {
   swatchEl.style.background = color;
 }
@@ -38,6 +48,11 @@ browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(s => {
   populateTracks(s.availableTracks || [], s.zhTrack, s.enTrack);
 });
 
+/**
+ * @param {Track[]} tracks
+ * @param {string} zhTrack
+ * @param {string} enTrack
+ */
 function populateTracks(tracks, zhTrack, enTrack) {
   [zhSel, enSel].forEach(sel => { sel.innerHTML = ''; });
   if (!tracks.length) {

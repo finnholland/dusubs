@@ -1,7 +1,9 @@
-/**
- * background.js
- */
+// @ts-check
 
+/**
+ * @param {string} url
+ * @returns {'zh' | 'en' | string}
+ */
 function guessLang(url) {
   const m = url.match(/[?&]lang=([^&]+)/i)
     || url.match(/[?&]tlang=([^&]+)/i);

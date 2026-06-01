@@ -1,10 +1,19 @@
+// @ts-check
+
+/**
+ * @typedef {{ code: string, name: string, url: string }} TrackInfo
+ * @typedef {{ videoId: string, tracks: TrackInfo[] }} PlayerTracks
+ */
+
 (() => {
   'use strict';
 
   const CHANNEL = 'hpf-main-isolated';
   const LOG = (...a) => console.log('[HPF main]', ...a);
+  /** @param {number} ms @returns {Promise<void>} */
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+  /** @param {string} rawUrl @returns {string} */
   function transformTrackUrl(rawUrl) {
     try {
       const u = new URL(rawUrl);
@@ -14,6 +23,7 @@
     } catch (_) { return rawUrl; }
   }
 
+  /** @param {string} rawUrl @returns {string} */
   function trackCode(rawUrl) {
     try {
       const p = new URL(rawUrl);
@@ -23,6 +33,7 @@
     } catch (_) { return ''; }
   }
 
+  /** @returns {PlayerTracks | null} */
   function getPlayerTracks() {
     const player = document.querySelector('#movie_player');
     if (!player?.getVideoData) { LOG('no player yet'); return null; }
@@ -78,6 +89,10 @@
     return { videoId, tracks };
   }
 
+  /**
+   * @param {string} type
+   * @param {PlayerTracks} payload
+   */
   function postToIsolated(type, payload) {
     window.dispatchEvent(new CustomEvent(CHANNEL, { detail: { type, payload } }));
   }
