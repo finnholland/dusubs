@@ -23,7 +23,7 @@ function updateSwatch(swatchEl, color) {
   swatchEl.style.background = color;
 }
 
-browser.storage.local.get(DEFAULTS).then(s => {
+browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(s => {
   fontScaleIn.value = s.fontScale;
   fontScaleVal.textContent = s.fontScale + '%';
   subPosIn.value = s.subPosition;
