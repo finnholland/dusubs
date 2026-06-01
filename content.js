@@ -110,6 +110,7 @@
     `;
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
+    if (!cfg.zhTrack && !cfg.enTrack) showSiteSubs();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -212,8 +213,8 @@
       LOG(`t=${t.toFixed(1)}s zh=${cues.zh.length} en=${cues.en.length} | "${zh}" / "${en}"`);
     }
 
-    if (!zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
-    if (!en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
+    if (cfg.zhTrack && !zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
+    if (cfg.enTrack && !en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
     if (zh !== lastZh) { lastZh = zh; zhBox.textContent = zh; }
     if (en !== lastEn) { lastEn = en; enBox.textContent = en; }
@@ -226,7 +227,10 @@
 
   // ── Hide YouTube's native subtitles once ours are showing ──────────────────
   let siteSubsHidden = false;
+  let siteSubsStyleEl = null;
+
   function hideSiteSubs() {
+    if (!cfg.zhTrack && !cfg.enTrack) return;
     if (siteSubsHidden || (!lastZh && !lastEn)) return;
     const hide = document.createElement('style');
     hide.textContent = `
@@ -234,7 +238,13 @@
       .bpx-player-subtitle-wrap     { opacity: 0 !important; }
     `;
     document.head.appendChild(hide);
+    siteSubsStyleEl = hide;
     siteSubsHidden = true;
+  }
+
+  function showSiteSubs() {
+    if (siteSubsStyleEl) { siteSubsStyleEl.remove(); siteSubsStyleEl = null; }
+    siteSubsHidden = false;
   }
   setTimeout(hideSiteSubs, 5000);
   setInterval(hideSiteSubs, 2000);
