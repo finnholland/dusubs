@@ -1,72 +1,215 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: sans-serif; width: 230px; padding: 14px;
-      margin: 0; background: #1a1a2e; color: #eee;
+      font-family: sans-serif;
+      width: 240px;
+      padding: 14px;
+      margin: 0;
+      background: #1a1a2e;
+      color: #eee;
     }
-    h2 { font-size: 14px; margin: 0 0 12px; color: #f0c040; }
-    p  { font-size: 12px; color: #999; margin: 0 0 12px; line-height: 1.5; }
+
+    h2 {
+      font-size: 14px;
+      margin: 0 0 12px;
+      color: #f0c040;
+    }
+
+    .section-title {
+      font-size: 10px;
+      color: #666;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 14px 0 6px;
+    }
+
     .row {
-      display: flex; align-items: center; justify-content: space-between;
-      background: #2a2a4e; border-radius: 6px; padding: 8px 10px;
-      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #2a2a4e;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
     }
-    .row label { font-size: 12px; cursor: pointer; }
-    .toggle { position: relative; width: 36px; height: 20px; }
-    .toggle input { opacity: 0; width: 0; height: 0; }
+
+    .row label {
+      font-size: 12px;
+      cursor: pointer;
+      color: #ddd;
+    }
+
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
     .slider {
-      position: absolute; inset: 0; background: #444;
-      border-radius: 20px; cursor: pointer; transition: .2s;
+      position: absolute;
+      inset: 0;
+      background: #444;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: .2s;
     }
+
     .slider:before {
-      content: ''; position: absolute;
-      width: 14px; height: 14px; left: 3px; top: 3px;
-      background: #fff; border-radius: 50%; transition: .2s;
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: .2s;
     }
-    input:checked + .slider { background: #f0c040; }
-    input:checked + .slider:before { transform: translateX(16px); }
-    .note { font-size: 11px; color: #777; margin-top: 10px; }
-    a { color: #f0c040; font-size: 11px; }
+
+    input:checked+.slider {
+      background: #f0c040;
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(16px);
+    }
+
+    .track-select,
+    .color-select {
+      background: #1a1a2e;
+      color: #eee;
+      border: 1px solid #555;
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 11px;
+    }
+
     .track-select {
-      background: #1a1a2e; color: #eee; border: 1px solid #555;
-      border-radius: 4px; padding: 2px 4px; font-size: 11px;
       max-width: 120px;
     }
+
+    .color-select {
+      max-width: 80px;
+    }
+
     .range-row {
-      flex-direction: column; align-items: stretch; gap: 4px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
     }
+
     .range-header {
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .range-header label { font-size: 12px; }
-    .range-header span { font-size: 12px; color: #f0c040; min-width: 36px; text-align: right; }
-    input[type=range] { width: 100%; accent-color: #f0c040; margin: 0; }
+
+    .range-header label {
+      font-size: 12px;
+      color: #ddd;
+    }
+
+    .range-header span {
+      font-size: 12px;
+      color: #f0c040;
+      min-width: 36px;
+      text-align: right;
+    }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: #f0c040;
+      margin: 0;
+    }
+
+    .color-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: #2a2a4e;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+    }
+
+    .color-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .color-col span {
+      font-size: 10px;
+      color: #888;
+    }
+
+    .note {
+      font-size: 11px;
+      color: #666;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    a {
+      color: #f0c040;
+      font-size: 11px;
+    }
   </style>
 </head>
+
 <body>
   <h2>汉字 Pinyin Subtitles</h2>
-  <p>Renders Chinese subtitles using the Hanzi Pinyin font.</p>
-  <div class="row">
-    <label for="dual">Show English translation below</label>
-    <label class="toggle">
-      <input type="checkbox" id="dual">
-      <span class="slider"></span>
-    </label>
-  </div>
+
+  <div class="section-title">Tracks</div>
   <div class="row" style="flex-direction:column;align-items:stretch;gap:8px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <label for="zh-track" style="font-size:12px;">Top track (Chinese)</label>
+      <label for="zh-track" style="font-size:12px;">Chinese (top)</label>
       <select id="zh-track" class="track-select"></select>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <label for="en-track" style="font-size:12px;">Bottom track (English)</label>
+      <label for="en-track" style="font-size:12px;">English (below)</label>
       <select id="en-track" class="track-select"></select>
     </div>
   </div>
+
+  <div class="section-title">Colour</div>
+  <div class="color-row">
+    <div class="color-col">
+      <span>Top</span>
+      <select id="zh-color" class="color-select">
+        <option value="#ffffff">White</option>
+        <option value="#ffe97a">Yellow</option>
+        <option value="#ffcccc">Pink</option>
+        <option value="#cce5ff">Blue</option>
+      </select>
+    </div>
+    <div class="color-col">
+      <span>Bottom</span>
+      <select id="en-color" class="color-select">
+        <option value="#ffe97a">Yellow</option>
+        <option value="#ffffff">White</option>
+        <option value="#ffcccc">Pink</option>
+        <option value="#cce5ff">Blue</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-title">Size & position</div>
   <div class="row range-row">
     <div class="range-header">
       <label for="font-scale">Font size</label>
@@ -81,8 +224,25 @@
     </div>
     <input type="range" id="sub-position" min="0" max="40" step="1" value="8">
   </div>
-  <p class="note">Enable subtitles in YouTube's CC menu first so tracks appear above, then select which goes on top/bottom.</p>
+
+  <div class="section-title">Style</div>
+  <div class="row">
+    <label for="tog-stroke">Stroke</label>
+    <label class="toggle"><input type="checkbox" id="tog-stroke" checked><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <label for="tog-window">Background window</label>
+    <label class="toggle"><input type="checkbox" id="tog-window"><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <label for="tog-shadow">Text shadow</label>
+    <label class="toggle"><input type="checkbox" id="tog-shadow"><span class="slider"></span></label>
+  </div>
+
+  <p class="note">Open a YouTube video — tracks load automatically.</p>
   <a href="https://github.com/parlr/hanzi-pinyin-font" target="_blank">About the font ↗</a>
+
   <script src="popup.js"></script>
 </body>
+
 </html>

@@ -1,62 +1,76 @@
-const dual = document.getElementById('dual');
 const zhSel = document.getElementById('zh-track');
 const enSel = document.getElementById('en-track');
-const fontScaleInput = document.getElementById('font-scale');
+const zhColorSel = document.getElementById('zh-color');
+const enColorSel = document.getElementById('en-color');
+const fontScaleIn = document.getElementById('font-scale');
 const fontScaleVal = document.getElementById('font-scale-val');
-const subPosInput = document.getElementById('sub-position');
+const subPosIn = document.getElementById('sub-position');
 const subPosVal = document.getElementById('sub-position-val');
+const togStroke = document.getElementById('tog-stroke');
+const togWindow = document.getElementById('tog-window');
+const togShadow = document.getElementById('tog-shadow');
 
-browser.storage.local.get({ dualEnable: true, availableTracks: [], zhTrack: '', enTrack: '', fontScale: 100, subPosition: 8 }).then(s => {
-  dual.checked = s.dualEnable;
-  fontScaleInput.value = s.fontScale;
+const DEFAULTS = {
+  fontScale: 100, subPosition: 8,
+  zhTrack: '', enTrack: '',
+  zhColor: '#ffffff', enColor: '#ffe97a',
+  stroke: true, window: false, shadow: false,
+};
+
+browser.storage.local.get(DEFAULTS).then(s => {
+  fontScaleIn.value = s.fontScale;
   fontScaleVal.textContent = s.fontScale + '%';
-  subPosInput.value = s.subPosition;
+  subPosIn.value = s.subPosition;
   subPosVal.textContent = s.subPosition + '%';
-  populateTracks(s.availableTracks, s.zhTrack, s.enTrack);
+  zhColorSel.value = s.zhColor;
+  enColorSel.value = s.enColor;
+  togStroke.checked = s.stroke;
+  togWindow.checked = s.window;
+  togShadow.checked = s.shadow;
+  populateTracks(s.availableTracks || [], s.zhTrack, s.enTrack);
 });
 
 function populateTracks(tracks, zhTrack, enTrack) {
   [zhSel, enSel].forEach(sel => { sel.innerHTML = ''; });
-
   if (!tracks.length) {
-    const msg = '<option value="" disabled selected>Open a YouTube video with subtitles</option>';
+    const msg = '<option value="">Open a YouTube video…</option>';
     zhSel.innerHTML = enSel.innerHTML = msg;
     return;
   }
-
-  // Add an "Off" option at the top of each dropdown
   [zhSel, enSel].forEach(sel => {
     sel.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'Off' }));
   });
-
   tracks.forEach(t => {
-    zhSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
-    enSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
+    [zhSel, enSel].forEach(sel => {
+      sel.appendChild(Object.assign(document.createElement('option'), {
+        value: t.languageCode, textContent: t.name,
+      }));
+    });
   });
-
-  // Use saved selection, or fall back to best Chinese / English match
-  const newZh = zhTrack || tracks.find(t => (t.languageCode || '').startsWith('zh'))?.languageCode || '';
-  const newEn = enTrack || tracks.find(t => (t.languageCode || '').startsWith('en'))?.languageCode || '';
-
+  const newZh = zhTrack || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
+  const newEn = enTrack || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
   zhSel.value = newZh;
   enSel.value = newEn;
-
-  // Persist whatever value was just resolved — previously this was never saved,
-  // so storage stayed as '' even though the dropdown showed a track.
   browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
 }
 
-dual.addEventListener('change', () => browser.storage.local.set({ dualEnable: dual.checked }));
 zhSel.addEventListener('change', () => browser.storage.local.set({ zhTrack: zhSel.value }));
 enSel.addEventListener('change', () => browser.storage.local.set({ enTrack: enSel.value }));
-fontScaleInput.addEventListener('input', () => {
-  fontScaleVal.textContent = fontScaleInput.value + '%';
-  browser.storage.local.set({ fontScale: Number(fontScaleInput.value) });
+zhColorSel.addEventListener('change', () => browser.storage.local.set({ zhColor: zhColorSel.value }));
+enColorSel.addEventListener('change', () => browser.storage.local.set({ enColor: enColorSel.value }));
+
+fontScaleIn.addEventListener('input', () => {
+  fontScaleVal.textContent = fontScaleIn.value + '%';
+  browser.storage.local.set({ fontScale: Number(fontScaleIn.value) });
 });
-subPosInput.addEventListener('input', () => {
-  subPosVal.textContent = subPosInput.value + '%';
-  browser.storage.local.set({ subPosition: Number(subPosInput.value) });
+subPosIn.addEventListener('input', () => {
+  subPosVal.textContent = subPosIn.value + '%';
+  browser.storage.local.set({ subPosition: Number(subPosIn.value) });
 });
+
+togStroke.addEventListener('change', () => browser.storage.local.set({ stroke: togStroke.checked }));
+togWindow.addEventListener('change', () => browser.storage.local.set({ window: togWindow.checked }));
+togShadow.addEventListener('change', () => browser.storage.local.set({ shadow: togShadow.checked }));
 
 browser.storage.onChanged.addListener((changes) => {
   if ('availableTracks' in changes) {

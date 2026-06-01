@@ -1,21 +1,14 @@
-/**
- * content.js  —  runs in ISOLATED world.
- *
- * Receives track data from youtube-main.js via CustomEvent, stores it,
- * renders the subtitle overlay, and coordinates with background.js for fetching.
- */
 (function () {
   'use strict';
 
   const CHANNEL = 'hpf-main-isolated';
   const LOG = (...a) => console.log('[HPF]', ...a);
 
-  // ── Fonts & overlay styles ─────────────────────────────────────────────────
   const FONT_WOFF2 = browser.runtime.getURL('fonts/Hanzi-Pinyin-Font.top.woff2');
   const FONT_TTF = browser.runtime.getURL('fonts/Hanzi-Pinyin-Font.top.ttf');
 
-  const style = document.createElement('style');
-  style.textContent = `
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
     @font-face {
       font-family: 'HanziPinyin';
       src: url('${FONT_WOFF2}') format('woff2'),
@@ -28,7 +21,6 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 20px;
       transform: translateX(-50%);
     }
     .hpf-box {
@@ -37,32 +29,12 @@
       text-align: center;
       flex-shrink: 0;
     }
-    .hpf-zh {
-      font-family: 'HanziPinyin', sans-serif !important;
-      font-size: var(--hpf-zh-size, 80px);
-      color: #fff;
-      line-height: 2.6;
-      -webkit-text-stroke: 3px black;
-      paint-order: stroke fill;
-    }
-    .hpf-en {
-      font-family: Arial, sans-serif;
-      font-size: var(--hpf-en-size, 44px);
-      color: #ffe97a;
-      line-height: 1.5;
-      -webkit-text-stroke: 2px black;
-      paint-order: stroke fill;
-    }
   `;
-  document.head.appendChild(style);
+  document.head.appendChild(styleEl);
 
-  // ── Overlay DOM ────────────────────────────────────────────────────────────
-  const root = document.createElement('div');
-  root.id = 'hpf-root';
-  const zhBox = document.createElement('div');
-  zhBox.className = 'hpf-box hpf-zh';
-  const enBox = document.createElement('div');
-  enBox.className = 'hpf-box hpf-en';
+  const root = document.createElement('div'); root.id = 'hpf-root';
+  const zhBox = document.createElement('div'); zhBox.className = 'hpf-box';
+  const enBox = document.createElement('div'); enBox.className = 'hpf-box';
   root.appendChild(zhBox);
   root.appendChild(enBox);
 
@@ -73,86 +45,111 @@
   else document.addEventListener('DOMContentLoaded', attachOverlay);
 
   // ── Settings ───────────────────────────────────────────────────────────────
-  let cfg = { dualEnable: true, fontScale: 100, subPosition: 8, zhTrack: '', enTrack: '' };
+  const DEFAULTS = {
+    fontScale: 100, subPosition: 8,
+    zhTrack: '', enTrack: '',
+    zhColor: '#ffffff', enColor: '#ffe97a',
+    stroke: true, window: false, shadow: false,
+  };
 
-  browser.storage.local
-    .get({ dualEnable: true, fontScale: 100, subPosition: 8, zhTrack: '', enTrack: '' })
-    .then(s => { cfg = s; LOG('cfg loaded:', JSON.stringify(cfg)); applyVisibility(); });
+  let cfg = { ...DEFAULTS };
+
+  browser.storage.local.get(DEFAULTS).then(s => {
+    cfg = s;
+    LOG('cfg:', JSON.stringify(cfg));
+    applyStyle();
+  });
 
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    let needReload = false;
-    for (const key of ['dualEnable', 'fontScale', 'subPosition', 'zhTrack', 'enTrack']) {
+    let trackChanged = false;
+    for (const key of Object.keys(DEFAULTS)) {
       if (key in changes) cfg[key] = changes[key].newValue;
     }
     if ('zhTrack' in changes || 'enTrack' in changes) {
-      LOG('track selection changed → zh:', cfg.zhTrack, 'en:', cfg.enTrack);
       cues.zh = []; cues.en = [];
-      needReload = true;
+      trackChanged = true;
     }
-    applyVisibility();
-    // If we already have trackUrls from the player, fetch immediately.
-    if (needReload && lastTrackUrls) fetchSubtitles(lastTrackUrls);
+    applyStyle();
+    if (trackChanged && lastTrackUrls) fetchSubtitles(lastTrackUrls);
   });
 
-  function applyVisibility() {
-    const zhOn = !!cfg.zhTrack;
-    const enOn = !!cfg.enTrack && cfg.dualEnable;
-    root.style.display = (zhOn || enOn) ? '' : 'none';
-    enBox.style.display = enOn ? '' : 'none';
+  // ── Apply styles ───────────────────────────────────────────────────────────
+  function applyStyle() {
+    const scale = (cfg.fontScale || 100) / 100;
+    const sample = document.querySelector('.ytp-caption-window-container .ytp-caption-segment');
+    let baseSz = 40;
+    if (sample) { const sz = parseFloat(getComputedStyle(sample).fontSize); if (sz) baseSz = sz; }
+    const zhSz = Math.round(baseSz * scale);
+    const enSz = Math.round(zhSz * 0.6);
+
+    const strokeZh = cfg.stroke ? `3px #000` : `0px #000`;
+    const strokeEn = cfg.stroke ? `2px #000` : `0px #000`;
+    const shadow = cfg.shadow ? '2px 2px 4px rgba(0,0,0,0.85)' : 'none';
+    const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
+    const winBgEn = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 8px;border-radius:3px;' : '';
+
+    zhBox.style.cssText = `
+      font-family: 'HanziPinyin', sans-serif;
+      font-size: ${zhSz}px;
+      color: ${cfg.zhColor};
+      line-height: 1.3;
+      -webkit-text-stroke: ${strokeZh};
+      paint-order: stroke fill;
+      text-shadow: ${shadow};
+      ${winBg}
+    `;
+    enBox.style.cssText = `
+      font-family: Arial, sans-serif;
+      font-size: ${enSz}px;
+      color: ${cfg.enColor};
+      line-height: 1.4;
+      -webkit-text-stroke: ${strokeEn};
+      paint-order: stroke fill;
+      text-shadow: ${shadow};
+      margin-top: 4px;
+      ${winBgEn}
+    `;
+
+    root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
   }
-  applyVisibility();
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function readText(selector) {
+    return [...document.querySelectorAll(selector)]
+      .map(el => el.textContent.trim()).filter(Boolean).join(' ');
+  }
 
   // ── Track data from MAIN world ─────────────────────────────────────────────
-  // { code → url } map of all available tracks for the current video.
   let lastTrackUrls = null;
 
   window.addEventListener(CHANNEL, (e) => {
     const { type, payload } = e.detail || {};
     if (type !== 'tracks') return;
-
     const { videoId, tracks } = payload;
-    LOG('received tracks from main world, videoId:', videoId, 'count:', tracks.length);
-
-    // Reset cues for the new video.
+    LOG('tracks from main, videoId:', videoId, 'count:', tracks.length);
     cues.zh = []; cues.en = [];
-
-    // Publish track list for the popup dropdowns.
     browser.storage.local.set({
       availableTracks: tracks.map(t => ({ languageCode: t.code, name: t.name })),
     }).catch(() => { });
-
-    // Build code → url map and store for use when track selection changes.
     lastTrackUrls = Object.fromEntries(tracks.map(t => [t.code, t.url]));
-    LOG('trackUrls keys:', Object.keys(lastTrackUrls).join(', '));
-
-    // Fetch if tracks are already selected.
     fetchSubtitles(lastTrackUrls);
   });
 
   // ── Subtitle fetching ──────────────────────────────────────────────────────
   function fetchSubtitles(trackUrls) {
-    if (!cfg.zhTrack && !cfg.enTrack) {
-      LOG('fetchSubtitles: no tracks selected');
-      return;
-    }
+    if (!cfg.zhTrack && !cfg.enTrack) return;
     const videoId = new URLSearchParams(location.search).get('v');
     if (!videoId) return;
-
-    LOG('fetchSubtitles → requesting background fetch, zh:', cfg.zhTrack, 'en:', cfg.enTrack);
+    LOG('fetchSubtitles zh:', cfg.zhTrack, 'en:', cfg.enTrack);
     browser.runtime.sendMessage({
-      type: 'fetch-subtitles',
-      videoId,
-      zhTrack: cfg.zhTrack,
-      enTrack: cfg.enTrack,
-      tracks: trackUrls,
+      type: 'fetch-subtitles', videoId,
+      zhTrack: cfg.zhTrack, enTrack: cfg.enTrack, tracks: trackUrls,
     }).catch(err => LOG('fetch-subtitles failed:', err));
   }
 
-  // background.js also forwards URLs it intercepts (e.g. when CC is already on).
   browser.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'subtitle-url' && (msg.lang === 'zh' || msg.lang === 'en')) {
-      LOG('intercepted subtitle-url from bg, lang:', msg.lang);
       parseCues(msg.lang, msg.url);
     }
   });
@@ -161,23 +158,17 @@
   const cues = { zh: [], en: [] };
 
   async function parseCues(lang, url) {
-    LOG(`parseCues(${lang}) url:`, url.slice(0, 100));
     try {
       const resp = await browser.runtime.sendMessage({ type: 'fetch-text', url });
-      if (!resp?.ok) { LOG(`parseCues(${lang}) fetch failed`); return; }
-
+      if (!resp?.ok) return;
       let parsed = [];
       try {
         const data = JSON.parse(resp.text);
-        parsed = (data.events || [])
-          .filter(e => e.segs)
-          .map(e => ({
-            start: e.tStartMs / 1000,
-            end: (e.tStartMs + (e.dDurationMs || 0)) / 1000,
-            text: e.segs.map(s => s.utf8 || '').join('').trim(),
-          }))
-          .filter(c => c.text);
-        LOG(`parseCues(${lang}) json3 cues:`, parsed.length);
+        parsed = (data.events || []).filter(e => e.segs).map(e => ({
+          start: e.tStartMs / 1000,
+          end: (e.tStartMs + (e.dDurationMs || 0)) / 1000,
+          text: e.segs.map(s => s.utf8 || '').join('').trim(),
+        })).filter(c => c.text);
       } catch (_) {
         const doc = new DOMParser().parseFromString(resp.text, 'text/xml');
         parsed = [...doc.querySelectorAll('text')].map(el => ({
@@ -185,12 +176,10 @@
           end: parseFloat(el.getAttribute('start')) + parseFloat(el.getAttribute('dur') || 0),
           text: el.textContent.trim(),
         })).filter(c => c.text);
-        LOG(`parseCues(${lang}) XML cues:`, parsed.length);
       }
-
       if (parsed.length) {
         cues[lang] = parsed;
-        LOG(`parseCues(${lang}) ok, first:`, JSON.stringify(parsed[0]));
+        LOG(`parseCues(${lang}) ${parsed.length} cues, first:`, JSON.stringify(parsed[0]));
       } else {
         LOG(`parseCues(${lang}) 0 cues, preview:`, resp.text?.slice(0, 200));
       }
@@ -199,23 +188,12 @@
     }
   }
 
-  // ── Main render loop ───────────────────────────────────────────────────────
+  // ── Render loop ────────────────────────────────────────────────────────────
   let lastZh = '', lastEn = '', lastLogTime = -1;
 
   function tick() {
     attachOverlay();
-
-    const sample = document.querySelector('.ytp-caption-window-container .ytp-caption-segment');
-    let baseSz = 40;
-    if (sample) {
-      const sz = parseFloat(getComputedStyle(sample).fontSize);
-      if (sz) baseSz = sz;
-    }
-    const scale = (cfg.fontScale || 100) / 100;
-    const zhSz = Math.round(baseSz * scale);
-    root.style.setProperty('--hpf-zh-size', zhSz + 'px');
-    root.style.setProperty('--hpf-en-size', Math.round(zhSz * 0.6) + 'px');
-    enBox.style.marginTop = -Math.round(zhSz * 1.1) + 'px';
+    applyStyle();
 
     const video = document.querySelector('video');
     if (video) {
@@ -229,14 +207,13 @@
     const findCue = (lang) => cues[lang].find(c => t >= c.start && t < c.end)?.text || '';
 
     let zh = cfg.zhTrack ? findCue('zh') : '';
-    let en = (cfg.enTrack && cfg.dualEnable) ? findCue('en') : '';
+    let en = cfg.enTrack ? findCue('en') : '';
 
     if (t > 0 && Math.floor(t) % 2 === 0 && Math.floor(t) !== lastLogTime) {
       lastLogTime = Math.floor(t);
-      LOG(`t=${t.toFixed(1)}s zh=${cues.zh.length}cues en=${cues.en.length}cues | "${zh}" / "${en}"`);
+      LOG(`t=${t.toFixed(1)}s zh=${cues.zh.length} en=${cues.en.length} | "${zh}" / "${en}"`);
     }
 
-    // Bilibili fallback
     if (!zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
     if (!en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
@@ -244,17 +221,12 @@
     if (en !== lastEn) { lastEn = en; enBox.textContent = en; }
 
     zhBox.style.display = zh ? '' : 'none';
-    enBox.style.display = (cfg.dualEnable && en) ? '' : 'none';
-  }
-
-  function readText(selector) {
-    return [...document.querySelectorAll(selector)]
-      .map(el => el.textContent.trim()).filter(Boolean).join(' ');
+    enBox.style.display = (cfg.enTrack && en) ? '' : 'none';
   }
 
   setInterval(tick, 80);
 
-  // ── Hide YouTube's native subtitle layer once ours is showing ──────────────
+  // ── Hide YouTube's native subtitles once ours are showing ──────────────────
   let siteSubsHidden = false;
   function hideSiteSubs() {
     if (siteSubsHidden || (!lastZh && !lastEn)) return;
