@@ -12,20 +12,32 @@
     "*://*.bilivideo.com/*"
   ],
   "background": {
-    "scripts": ["background.js"],
+    "scripts": [
+      "background.js"
+    ],
     "persistent": false
   },
   "content_scripts": [
     {
+      "world": "MAIN",
       "matches": [
-        "*://*.youtube.com/*",
-        "*://*.bilibili.com/*"
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-main.js"
+      ]
+    },
+    {
+      "world": "ISOLATED",
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.bilibili.com/*"
       ],
       "js": [
         "content.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": false
+      ]
     }
   ],
   "browser_action": {

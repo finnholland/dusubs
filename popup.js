@@ -1,50 +1,91 @@
-const dual = document.getElementById('dual');
 const zhSel = document.getElementById('zh-track');
 const enSel = document.getElementById('en-track');
-const fontScaleInput = document.getElementById('font-scale');
-const fontScaleVal   = document.getElementById('font-scale-val');
-const subPosInput    = document.getElementById('sub-position');
-const subPosVal      = document.getElementById('sub-position-val');
+const zhColorSel = document.getElementById('zh-color');
+const enColorSel = document.getElementById('en-color');
+const zhSwatch = document.getElementById('zh-swatch');
+const enSwatch = document.getElementById('en-swatch');
+const fontScaleIn = document.getElementById('font-scale');
+const fontScaleVal = document.getElementById('font-scale-val');
+const subPosIn = document.getElementById('sub-position');
+const subPosVal = document.getElementById('sub-position-val');
+const togStroke = document.getElementById('tog-stroke');
+const togWindow = document.getElementById('tog-window');
+const togShadow = document.getElementById('tog-shadow');
 
-browser.storage.local.get({ dualEnable: true, availableTracks: [], zhTrack: '', enTrack: '', fontScale: 100, subPosition: 8 }).then(s => {
-  dual.checked = s.dualEnable;
-  fontScaleInput.value = s.fontScale;
+const DEFAULTS = {
+  fontScale: 100, subPosition: 8,
+  zhTrack: '', enTrack: '',
+  zhColor: '#ffffff', enColor: '#ffe97a',
+  stroke: true, window: false, shadow: false,
+};
+
+function updateSwatch(swatchEl, color) {
+  swatchEl.style.background = color;
+}
+
+browser.storage.local.get(DEFAULTS).then(s => {
+  fontScaleIn.value = s.fontScale;
   fontScaleVal.textContent = s.fontScale + '%';
-  subPosInput.value = s.subPosition;
+  subPosIn.value = s.subPosition;
   subPosVal.textContent = s.subPosition + '%';
-  populateTracks(s.availableTracks, s.zhTrack, s.enTrack);
+  zhColorSel.value = s.zhColor;
+  enColorSel.value = s.enColor;
+  updateSwatch(zhSwatch, s.zhColor);
+  updateSwatch(enSwatch, s.enColor);
+  togStroke.checked = s.stroke;
+  togWindow.checked = s.window;
+  togShadow.checked = s.shadow;
+  populateTracks(s.availableTracks || [], s.zhTrack, s.enTrack);
 });
 
 function populateTracks(tracks, zhTrack, enTrack) {
   [zhSel, enSel].forEach(sel => { sel.innerHTML = ''; });
-
   if (!tracks.length) {
-    const msg = '<option value="" disabled selected>Open a YouTube video with subtitles</option>';
+    const msg = '<option value="">No video open…</option>';
     zhSel.innerHTML = enSel.innerHTML = msg;
     return;
   }
-
-  tracks.forEach(t => {
-    zhSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
-    enSel.appendChild(Object.assign(document.createElement('option'), { value: t.languageCode, textContent: t.name }));
+  [zhSel, enSel].forEach(sel => {
+    sel.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'Off' }));
   });
-
-  // Use saved selection, or fall back to best Chinese / English match
-  zhSel.value = zhTrack || tracks.find(t => (t.languageCode || '').startsWith('zh'))?.languageCode || '';
-  enSel.value = enTrack || tracks.find(t => (t.languageCode || '').startsWith('en'))?.languageCode || '';
+  tracks.forEach(t => {
+    [zhSel, enSel].forEach(sel => {
+      sel.appendChild(Object.assign(document.createElement('option'), {
+        value: t.languageCode, textContent: t.name,
+      }));
+    });
+  });
+  const newZh = zhTrack || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
+  const newEn = enTrack || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
+  zhSel.value = newZh;
+  enSel.value = newEn;
+  browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
 }
 
-dual.addEventListener('change', () => browser.storage.local.set({ dualEnable: dual.checked }));
 zhSel.addEventListener('change', () => browser.storage.local.set({ zhTrack: zhSel.value }));
 enSel.addEventListener('change', () => browser.storage.local.set({ enTrack: enSel.value }));
-fontScaleInput.addEventListener('input', () => {
-  fontScaleVal.textContent = fontScaleInput.value + '%';
-  browser.storage.local.set({ fontScale: Number(fontScaleInput.value) });
+
+zhColorSel.addEventListener('change', () => {
+  updateSwatch(zhSwatch, zhColorSel.value);
+  browser.storage.local.set({ zhColor: zhColorSel.value });
 });
-subPosInput.addEventListener('input', () => {
-  subPosVal.textContent = subPosInput.value + '%';
-  browser.storage.local.set({ subPosition: Number(subPosInput.value) });
+enColorSel.addEventListener('change', () => {
+  updateSwatch(enSwatch, enColorSel.value);
+  browser.storage.local.set({ enColor: enColorSel.value });
 });
+
+fontScaleIn.addEventListener('input', () => {
+  fontScaleVal.textContent = fontScaleIn.value + '%';
+  browser.storage.local.set({ fontScale: Number(fontScaleIn.value) });
+});
+subPosIn.addEventListener('input', () => {
+  subPosVal.textContent = subPosIn.value + '%';
+  browser.storage.local.set({ subPosition: Number(subPosIn.value) });
+});
+
+togStroke.addEventListener('change', () => browser.storage.local.set({ stroke: togStroke.checked }));
+togWindow.addEventListener('change', () => browser.storage.local.set({ window: togWindow.checked }));
+togShadow.addEventListener('change', () => browser.storage.local.set({ shadow: togShadow.checked }));
 
 browser.storage.onChanged.addListener((changes) => {
   if ('availableTracks' in changes) {
