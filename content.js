@@ -1,3 +1,11 @@
+// @ts-check
+
+/**
+ * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
+ *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean }} Config
+ * @typedef {{ start: number, end: number, text: string }} Cue
+ */
+
 (function () {
   'use strict';
 
@@ -45,6 +53,7 @@
   else document.addEventListener('DOMContentLoaded', attachOverlay);
 
   // ── Settings ───────────────────────────────────────────────────────────────
+  /** @type {Config} */
   const DEFAULTS = {
     fontScale: 100, subPosition: 8,
     zhTrack: '', enTrack: '',
@@ -52,6 +61,7 @@
     stroke: true, window: false, shadow: false,
   };
 
+  /** @type {Config} */
   let cfg = { ...DEFAULTS };
 
   browser.storage.local.get(DEFAULTS).then(s => {
@@ -120,6 +130,7 @@
   }
 
   // ── Track data from MAIN world ─────────────────────────────────────────────
+  /** @type {Record<string, string> | null} */
   let lastTrackUrls = null;
 
   window.addEventListener(CHANNEL, (e) => {
@@ -136,6 +147,7 @@
   });
 
   // ── Subtitle fetching ──────────────────────────────────────────────────────
+  /** @param {Record<string, string>} trackUrls */
   function fetchSubtitles(trackUrls) {
     if (!cfg.zhTrack && !cfg.enTrack) return;
     const videoId = new URLSearchParams(location.search).get('v');
@@ -154,8 +166,13 @@
   });
 
   // ── Cue parsing ────────────────────────────────────────────────────────────
+  /** @type {{ zh: Cue[], en: Cue[] }} */
   const cues = { zh: [], en: [] };
 
+  /**
+   * @param {'zh' | 'en'} lang
+   * @param {string} url
+   */
   async function parseCues(lang, url) {
     try {
       const resp = await browser.runtime.sendMessage({ type: 'fetch-text', url });
