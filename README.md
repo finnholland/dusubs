@@ -1,15 +1,16 @@
 # Hanzi Pinyin Subtitles
 
-A browser extension that overlays Chinese subtitles using a **Hanzi-Pinyin font** — characters with pinyin pronunciation printed above them — on YouTube and Bilibili. A second subtitle track (e.g. English) can be shown below simultaneously.
+A browser extension that overlays Chinese subtitles with pinyin readings above each character on YouTube and Bilibili. A second subtitle track (e.g. English) can be shown below simultaneously.
 
 ## What it looks like
 
-The extension renders a floating overlay directly on the video. The top line uses the bundled Hanzi-Pinyin font so every character automatically shows its pinyin reading. The bottom line shows a secondary track (typically English) in a smaller size beneath.
+The extension renders a floating overlay directly on the video. The top line annotates every Chinese character with its pinyin reading using HTML5 `<ruby>` tags, powered by the bundled `pinyin-pro` library. The bottom line shows a secondary track (typically English) in a smaller size beneath.
 
 ## Features
 
 - **Dual-track subtitles** — pick any two tracks from the video's available captions independently
-- **Hanzi-Pinyin font** — pinyin is rendered inline above each character, no separate annotation needed
+- **Live pinyin annotation** — pinyin is computed at runtime by `pinyin-pro` and rendered above each character using `<ruby>`/`<rt>` tags
+- **Pinyin toggle** — hide pinyin and show bare characters when you want to test yourself
 - **Per-track colour** — white, yellow, pink, blue, or green per track
 - **Font scale & position** — resize and reposition the overlay with sliders
 - **Stroke / Window / Shadow** — visual style toggles for readability
@@ -20,11 +21,12 @@ The extension renders a floating overlay directly on the video. The top line use
 | File | World | Role |
 |---|---|---|
 | `youtube-main.js` | MAIN | Accesses YouTube's internal player API to read available caption tracks and their URLs |
-| `content.js` | ISOLATED | Renders the subtitle overlay; fetches and parses cues; listens for track data from the main world |
+| `pinyin-pro.js` | ISOLATED | Bundled [pinyin-pro](https://github.com/zh-lx/pinyin-pro) library; exposes `pinyinPro` on `globalThis` |
+| `content.js` | ISOLATED | Renders the subtitle overlay; fetches and parses cues; annotates characters with `<ruby>` tags via `pinyin-pro` |
 | `background.js` | Service worker | Cross-origin fetch proxy for subtitle files; passively intercepts subtitle requests via `webRequest` |
-| `popup.js` / `popup.html` | Extension popup | Settings UI — track selection, colours, scale, position, toggles |
+| `popup.js` / `popup.html` | Extension popup | Settings UI — track selection, colours, scale, position, toggles (including pinyin on/off) |
 
-Subtitles are fetched in JSON3 format (YouTube's internal timed-text format) and parsed directly in the extension. An XML fallback handles older-format responses. The overlay is synced to the video's `currentTime` at ~12 fps.
+Subtitles are fetched in JSON3 format (YouTube's internal timed-text format) and parsed directly in the extension. An XML fallback handles older-format responses. The overlay is synced to the video's `currentTime` at ~12 fps. Chinese characters are annotated at render time: `pinyin-pro` returns one pinyin string per character, and each is wrapped in a `<ruby><rt>` pair.
 
 ## Installation
 
@@ -55,6 +57,7 @@ The extension hides the site's native subtitles once its own overlay is active. 
 
 ```
 manifest.json          Extension manifest (MV2)
+pinyin-pro.js          Bundled pinyin-pro library (injected before content.js)
 content.js             Subtitle overlay (isolated world)
 youtube-main.js        YouTube player API access (main world)
 background.js          Fetch proxy + webRequest intercept
@@ -67,4 +70,6 @@ fonts/
 
 ## Credits
 
-Hanzi-Pinyin font by [jtianling/hanzi-pinyin-font](https://github.com/jtianling/hanzi-pinyin-font).
+Pinyin computation by [zh-lx/pinyin-pro](https://github.com/zh-lx/pinyin-pro).
+
+Hanzi-Pinyin font by [jtianling/hanzi-pinyin-font](https://github.com/jtianling/hanzi-pinyin-font) (font files retained, not currently used for rendering).
