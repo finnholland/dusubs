@@ -47,6 +47,7 @@
   },
   "web_accessible_resources": [
     "fonts/Hanzi-Pinyin-Font.top.woff2",
-    "fonts/Hanzi-Pinyin-Font.top.ttf"
+    "fonts/Hanzi-Pinyin-Font.top.ttf",
+    "cedict.json"
   ]
 }

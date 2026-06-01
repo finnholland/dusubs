@@ -32,6 +32,8 @@
     .hpf-box ruby {
       letter-spacing: 0;
       margin-right: 0.15em;
+      pointer-events: auto;
+      cursor: default;
     }
     .hpf-box rt {
       font-family: Arial, sans-serif;
@@ -39,6 +41,24 @@
       line-height: 1.2;
       letter-spacing: 0;
     }
+    #hpf-tooltip {
+      position: fixed;
+      z-index: 2147483647;
+      background: rgba(10,10,30,0.96);
+      color: #eee;
+      border: 1px solid #44446a;
+      border-radius: 8px;
+      padding: 10px 14px;
+      pointer-events: none;
+      max-width: 320px;
+      font-family: sans-serif;
+      line-height: 1.4;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    .hpf-tip-word { font-size: 28px; color: #fff; font-weight: normal; }
+    .hpf-tip-pinyin { font-size: 13px; color: #f0c040; margin-top: 2px; }
+    .hpf-tip-defs { font-size: 12px; color: #ccc; margin-top: 6px; }
   `;
   document.head.appendChild(styleEl);
 
@@ -48,8 +68,11 @@
   root.appendChild(zhBox);
   root.appendChild(enBox);
 
+  const tooltip = document.createElement('div'); tooltip.id = 'hpf-tooltip';
+
   function attachOverlay() {
     if (!document.body.contains(root)) document.body.appendChild(root);
+    if (!document.body.contains(tooltip)) document.body.appendChild(tooltip);
   }
   if (document.body) attachOverlay();
   else document.addEventListener('DOMContentLoaded', attachOverlay);
@@ -131,6 +154,65 @@
     return [...document.querySelectorAll(selector)]
       .map(el => el.textContent.trim()).filter(Boolean).join(' ');
   }
+
+  // ── Dictionary ─────────────────────────────────────────────────────────────
+  /** @type {Record<string, [string, string]> | null} */
+  let hpfDict = null;
+  let dictLoading = false;
+
+  async function loadDict() {
+    if (hpfDict || dictLoading) return;
+    dictLoading = true;
+    try {
+      const resp = await fetch(browser.runtime.getURL('cedict.json'));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      hpfDict = await resp.json();
+      LOG('dict loaded:', Object.keys(hpfDict).length, 'entries');
+    } catch (e) {
+      LOG('dict load failed:', e);
+      dictLoading = false;
+    }
+  }
+
+  /** @param {string} text @param {number} idx */
+  function lookupWord(text, idx) {
+    if (!hpfDict) return null;
+    const chars = [...text];
+    for (let len = Math.min(8, chars.length - idx); len >= 1; len--) {
+      const word = chars.slice(idx, idx + len).join('');
+      const entry = hpfDict[word];
+      if (entry) return { word, pinyin: entry[0], defs: entry[1] };
+    }
+    return null;
+  }
+
+  // ── Tooltip hover ──────────────────────────────────────────────────────────
+  zhBox.addEventListener('mouseover', (e) => {
+    if (!hpfDict) { loadDict(); return; }
+    const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
+    if (!ruby) { tooltip.style.display = 'none'; return; }
+    const idx = parseInt(/** @type {HTMLElement} */ (ruby).dataset.idx, 10);
+    const result = lookupWord(lastZh, idx);
+    if (!result) { tooltip.style.display = 'none'; return; }
+    tooltip.innerHTML =
+      `<div class="hpf-tip-word">${escapeHtml(result.word)}</div>` +
+      `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
+      `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>`;
+    tooltip.style.display = 'block';
+  });
+
+  zhBox.addEventListener('mousemove', (e) => {
+    if (tooltip.style.display === 'none') return;
+    const pad = 10;
+    let tx = e.clientX + 16;
+    let ty = e.clientY - tooltip.offsetHeight - 8;
+    if (tx + tooltip.offsetWidth > window.innerWidth - pad) tx = e.clientX - tooltip.offsetWidth - 8;
+    if (ty < pad) ty = e.clientY + 20;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = ty + 'px';
+  });
+
+  zhBox.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
 
   // ── Track data from MAIN world ─────────────────────────────────────────────
   /** @type {Record<string, string> | null} */
@@ -225,7 +307,7 @@
       const py = pinyinArr[i] || '';
       const escaped = escapeHtml(char);
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
-        return `<ruby>${escaped}<rt>${py}</rt></ruby>`;
+        return `<ruby data-idx="${i}">${escaped}<rt>${py}</rt></ruby>`;
       }
       return escaped;
     }).join('');
@@ -274,6 +356,7 @@
     enBox.style.display = (cfg.enTrack && en) ? '' : 'none';
   }
 
+  loadDict();
   setInterval(tick, 80);
 
   // ── Hide YouTube's native subtitles once ours are showing ──────────────────
