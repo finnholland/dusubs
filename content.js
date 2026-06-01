@@ -83,18 +83,16 @@
     const zhSz = Math.round(baseSz * scale);
     const enSz = Math.round(zhSz * 0.6);
 
-    const strokeZh = cfg.stroke ? `3px #000` : `0px #000`;
-    const strokeEn = cfg.stroke ? `2px #000` : `0px #000`;
-    const shadow = cfg.shadow ? '2px 2px 4px rgba(0,0,0,0.85)' : 'none';
+    const stroke = cfg.stroke ? '3px #000' : '0px #000';
+    const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
     const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
-    const winBgEn = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 8px;border-radius:3px;' : '';
 
     zhBox.style.cssText = `
       font-family: 'HanziPinyin', sans-serif;
       font-size: ${zhSz}px;
       color: ${cfg.zhColor};
       line-height: 1.3;
-      -webkit-text-stroke: ${strokeZh};
+      -webkit-text-stroke: ${stroke};
       paint-order: stroke fill;
       text-shadow: ${shadow};
       ${winBg}
@@ -104,11 +102,11 @@
       font-size: ${enSz}px;
       color: ${cfg.enColor};
       line-height: 1.4;
-      -webkit-text-stroke: ${strokeEn};
+      -webkit-text-stroke: ${stroke};
       paint-order: stroke fill;
       text-shadow: ${shadow};
       margin-top: 4px;
-      ${winBgEn}
+      ${winBg}
     `;
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';

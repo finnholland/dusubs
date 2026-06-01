@@ -2,6 +2,8 @@ const zhSel = document.getElementById('zh-track');
 const enSel = document.getElementById('en-track');
 const zhColorSel = document.getElementById('zh-color');
 const enColorSel = document.getElementById('en-color');
+const zhSwatch = document.getElementById('zh-swatch');
+const enSwatch = document.getElementById('en-swatch');
 const fontScaleIn = document.getElementById('font-scale');
 const fontScaleVal = document.getElementById('font-scale-val');
 const subPosIn = document.getElementById('sub-position');
@@ -17,6 +19,10 @@ const DEFAULTS = {
   stroke: true, window: false, shadow: false,
 };
 
+function updateSwatch(swatchEl, color) {
+  swatchEl.style.background = color;
+}
+
 browser.storage.local.get(DEFAULTS).then(s => {
   fontScaleIn.value = s.fontScale;
   fontScaleVal.textContent = s.fontScale + '%';
@@ -24,6 +30,8 @@ browser.storage.local.get(DEFAULTS).then(s => {
   subPosVal.textContent = s.subPosition + '%';
   zhColorSel.value = s.zhColor;
   enColorSel.value = s.enColor;
+  updateSwatch(zhSwatch, s.zhColor);
+  updateSwatch(enSwatch, s.enColor);
   togStroke.checked = s.stroke;
   togWindow.checked = s.window;
   togShadow.checked = s.shadow;
@@ -33,7 +41,7 @@ browser.storage.local.get(DEFAULTS).then(s => {
 function populateTracks(tracks, zhTrack, enTrack) {
   [zhSel, enSel].forEach(sel => { sel.innerHTML = ''; });
   if (!tracks.length) {
-    const msg = '<option value="">Open a YouTube video…</option>';
+    const msg = '<option value="">No video open…</option>';
     zhSel.innerHTML = enSel.innerHTML = msg;
     return;
   }
@@ -56,8 +64,15 @@ function populateTracks(tracks, zhTrack, enTrack) {
 
 zhSel.addEventListener('change', () => browser.storage.local.set({ zhTrack: zhSel.value }));
 enSel.addEventListener('change', () => browser.storage.local.set({ enTrack: enSel.value }));
-zhColorSel.addEventListener('change', () => browser.storage.local.set({ zhColor: zhColorSel.value }));
-enColorSel.addEventListener('change', () => browser.storage.local.set({ enColor: enColorSel.value }));
+
+zhColorSel.addEventListener('change', () => {
+  updateSwatch(zhSwatch, zhColorSel.value);
+  browser.storage.local.set({ zhColor: zhColorSel.value });
+});
+enColorSel.addEventListener('change', () => {
+  updateSwatch(enSwatch, enColorSel.value);
+  browser.storage.local.set({ enColor: enColorSel.value });
+});
 
 fontScaleIn.addEventListener('input', () => {
   fontScaleVal.textContent = fontScaleIn.value + '%';
