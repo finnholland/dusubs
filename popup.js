@@ -19,6 +19,7 @@ const togStroke = /** @type {HTMLInputElement} */ (document.getElementById('tog-
 const togWindow = /** @type {HTMLInputElement} */ (document.getElementById('tog-window'));
 const togShadow = /** @type {HTMLInputElement} */ (document.getElementById('tog-shadow'));
 const togSandhi = /** @type {HTMLInputElement} */ (document.getElementById('tog-sandhi'));
+const sandhiSub = /** @type {HTMLElement} */ (document.getElementById('sandhi-sub'));
 
 const DEFAULTS = {
   fontScale: 100, subPosition: 8,
@@ -45,6 +46,7 @@ browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(s => {
   updateSwatch(zhSwatch, s.zhColor);
   updateSwatch(enSwatch, s.enColor);
   togPinyin.checked = s.showPinyin;
+  sandhiSub.classList.toggle('hidden', !s.showPinyin);
   togStroke.checked = s.stroke;
   togWindow.checked = s.window;
   togShadow.checked = s.shadow;
@@ -102,7 +104,10 @@ subPosIn.addEventListener('input', () => {
   browser.storage.local.set({ subPosition: Number(subPosIn.value) });
 });
 
-togPinyin.addEventListener('change', () => browser.storage.local.set({ showPinyin: togPinyin.checked }));
+togPinyin.addEventListener('change', () => {
+  sandhiSub.classList.toggle('hidden', !togPinyin.checked);
+  browser.storage.local.set({ showPinyin: togPinyin.checked });
+});
 togStroke.addEventListener('change', () => browser.storage.local.set({ stroke: togStroke.checked }));
 togWindow.addEventListener('change', () => browser.storage.local.set({ window: togWindow.checked }));
 togShadow.addEventListener('change', () => browser.storage.local.set({ shadow: togShadow.checked }));
