@@ -59,10 +59,9 @@
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
     .hpf-tip-word { font-size: 28px; color: #fff; font-weight: normal; }
-    .hpf-tip-pinyin { font-size: 13px; color: #f0c040; margin-top: 2px; }
+    .hpf-tip-pinyin { font-size: 13px; margin-top: 2px; }
     .hpf-tip-defs { font-size: 12px; color: #ccc; margin-top: 6px; }
-    .hpf-box ruby.hpf-sandhi rt { color: #ffaa44; }
-    .hpf-box ruby.hpf-sandhi { text-decoration: underline dotted rgba(255,170,68,0.5); text-underline-offset: 2px; }
+    .hpf-box rt { color: #fff; }
   `;
   document.head.appendChild(styleEl);
 
@@ -270,7 +269,7 @@
     if (!result) { tooltip.style.display = 'none'; return; }
     tooltip.innerHTML =
       `<div class="hpf-tip-word">${escapeHtml(result.word)}</div>` +
-      `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
+      `<div class="hpf-tip-pinyin" style="color:${cfg.zhColor}">${escapeHtml(result.pinyin)}</div>` +
       `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>`;
     tooltip.style.display = 'block';
   });
@@ -385,8 +384,8 @@
       const py = pinyinArr[i] || '';
       const escaped = escapeHtml(char);
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
-        const cls = correctedSet.has(i) ? ' class="hpf-sandhi"' : '';
-        return `<ruby data-idx="${i}"${cls}>${escaped}<rt>${py}</rt></ruby>`;
+        const rtColor = correctedSet.has(i) ? cfg.zhColor : '#fff';
+        return `<ruby data-idx="${i}">${escaped}<rt style="color:${rtColor}">${py}</rt></ruby>`;
       }
       return escaped;
     }).join('');
