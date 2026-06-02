@@ -15,13 +15,15 @@
   const styleEl = document.createElement('style');
   styleEl.textContent = `
     #hpf-root {
-      position: fixed;
+      position: absolute;
       z-index: 2147483647;
       pointer-events: none;
       display: flex;
       flex-direction: column;
       align-items: center;
+      left: 50%;
       transform: translateX(-50%);
+      max-width: 90%;
     }
     .hpf-box {
       width: max-content;
@@ -70,8 +72,19 @@
 
   const tooltip = document.createElement('div'); tooltip.id = 'hpf-tooltip';
 
+  // Player containers — overlay is appended here so scrolling is handled by the DOM
+  const PLAYER_SEL = '.html5-video-player, .bpx-player-container';
+  let overlayContainer = null;
+
   function attachOverlay() {
-    if (!document.body.contains(root)) document.body.appendChild(root);
+    const player = document.querySelector(PLAYER_SEL);
+    const target = player || document.body;
+    if (overlayContainer !== target || !target.contains(root)) {
+      overlayContainer = target;
+      target.appendChild(root);
+      // Fall back to fixed positioning when we can't find a player container
+      root.style.position = player ? 'absolute' : 'fixed';
+    }
     if (!document.body.contains(tooltip)) document.body.appendChild(tooltip);
   }
   if (document.body) attachOverlay();
@@ -116,34 +129,33 @@
     let baseSz = 40;
     if (sample) { const sz = parseFloat(getComputedStyle(sample).fontSize); if (sz) baseSz = sz; }
     const zhSz = Math.round(baseSz * scale);
-    const enSz = Math.round(zhSz * 0.8);
+    const defaultSize = Math.round(zhSz * .8);
 
     const stroke = cfg.stroke ? '3px #000' : '0px #000';
     const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
     const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
 
-    zhBox.style.cssText = `
-      font-family: sans-serif;
-      font-size: ${zhSz}px;
-      color: ${cfg.zhColor};
-      line-height: ${cfg.showPinyin ? 'normal' : '1.3'};
-      letter-spacing: 0.25em;
-      -webkit-text-stroke: ${stroke};
-      paint-order: stroke fill;
-      text-shadow: ${shadow};
-      ${winBg}
-    `;
-    enBox.style.cssText = `
+    const defaultBoxStyle = `
       font-family: Arial, sans-serif;
-      font-size: ${enSz}px;
-      color: ${cfg.enColor};
       line-height: 1.4;
       -webkit-text-stroke: ${stroke};
       paint-order: stroke fill;
       text-shadow: ${shadow};
-      margin-top: 4px;
       ${winBg}
     `;
+    // Chinese-specific kerning — only applied when the track is actually Chinese
+    const zhKerning = `
+      font-family: sans-serif;
+      letter-spacing: 0.25em;
+      line-height: ${cfg.showPinyin ? 'normal' : '1.3'};
+      font-size: ${zhSz}px; 
+    `;
+
+    const zhTrackIsChinese = /^zh/i.test(cfg.zhTrack || '');
+    const enTrackIsChinese = /^zh/i.test(cfg.enTrack || '');
+
+    zhBox.style.cssText = defaultBoxStyle + `font-size: ${defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
+    enBox.style.cssText = defaultBoxStyle + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + (enTrackIsChinese ? zhKerning : '');
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
     if (!cfg.zhTrack && !cfg.enTrack) showSiteSubs();
@@ -191,7 +203,7 @@
     if (!hpfDict) { loadDict(); return; }
     const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
     if (!ruby) { tooltip.style.display = 'none'; return; }
-    const idx = parseInt(/** @type {HTMLElement} */ (ruby).dataset.idx, 10);
+    const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
     const result = lookupWord(lastZh, idx);
     if (!result) { tooltip.style.display = 'none'; return; }
     tooltip.innerHTML =
@@ -321,7 +333,12 @@
     applyStyle();
 
     const video = document.querySelector('video');
-    if (video) {
+
+    // When inside a player container, bottom % is relative to its height — no scroll tracking needed.
+    // Fall back to manual fixed positioning if we're on document.body.
+    if (overlayContainer && overlayContainer !== document.body) {
+      root.style.bottom = (cfg.subPosition || 8) + '%';
+    } else if (video) {
       const r = video.getBoundingClientRect();
       root.style.left = (r.left + r.width / 2) + 'px';
       root.style.bottom = (window.innerHeight - r.bottom + r.height * (cfg.subPosition || 8) / 100) + 'px';
@@ -345,12 +362,19 @@
     const showPinyinChanged = cfg.showPinyin !== lastShowPinyin;
     if (showPinyinChanged) lastShowPinyin = cfg.showPinyin;
 
+    const zhIsZh = /^zh/i.test(cfg.zhTrack || '');
+    const enIsZh = /^zh/i.test(cfg.enTrack || '');
+
     if (zh !== lastZh || showPinyinChanged) {
       lastZh = zh;
-      if (cfg.showPinyin) zhBox.innerHTML = renderRuby(zh);
+      if (cfg.showPinyin && zhIsZh) zhBox.innerHTML = renderRuby(zh);
       else zhBox.textContent = zh;
     }
-    if (en !== lastEn) { lastEn = en; enBox.textContent = en; }
+    if (en !== lastEn || showPinyinChanged) {
+      lastEn = en;
+      if (cfg.showPinyin && enIsZh) enBox.innerHTML = renderRuby(en);
+      else enBox.textContent = en;
+    }
 
     zhBox.style.display = zh ? '' : 'none';
     enBox.style.display = (cfg.enTrack && en) ? '' : 'none';
