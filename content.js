@@ -30,6 +30,7 @@
       max-width: 100%;
       text-align: center;
       flex-shrink: 0;
+      transition: opacity 0.15s ease;
     }
     .hpf-box ruby {
       letter-spacing: 0;
@@ -147,15 +148,15 @@
     // Chinese-specific kerning — only applied when the track is actually Chinese
     const zhKerning = `
       font-family: sans-serif;
-      letter-spacing: 0.25em;
-      line-height: ${cfg.showPinyin ? 'normal' : '1.3'};
+      letter-spacing: ${cfg.showPinyin ? '0' : '.15em'};
+      line-height: 'normal';
       font-size: ${zhSz}px; 
     `;
 
     const zhTrackIsChinese = /^zh/i.test(cfg.zhTrack || '');
     const enTrackIsChinese = /^zh/i.test(cfg.enTrack || '');
 
-    zhBox.style.cssText = defaultBoxStyle + `font-size: ${defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
+    zhBox.style.cssText = defaultBoxStyle + `font-size: ${zhTrackIsChinese ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
     enBox.style.cssText = defaultBoxStyle + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + (enTrackIsChinese ? zhKerning : '');
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
@@ -416,7 +417,7 @@
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null);
+  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null), sandhiTransitioning = false;
 
   function tick() {
     attachOverlay();
