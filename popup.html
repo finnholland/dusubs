@@ -142,6 +142,25 @@
       color: #bbb;
     }
 
+    .toggle-sub {
+      padding-left: 14px;
+      overflow: hidden;
+      transition: max-height 0.2s ease, opacity 0.2s ease;
+      max-height: 40px;
+      opacity: 1;
+    }
+
+    .toggle-sub.hidden {
+      max-height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .toggle-sub .toggle-row label.name {
+      color: #888;
+      font-size: 11px;
+    }
+
     .toggle {
       position: relative;
       width: 34px;
@@ -262,6 +281,12 @@
     <label class="name" for="tog-pinyin">Pinyin</label>
     <label class="toggle"><input type="checkbox" id="tog-pinyin" checked><span class="slider"></span></label>
   </div>
+  <div class="toggle-sub" id="sandhi-sub">
+    <div class="toggle-row">
+      <label class="name" for="tog-sandhi">Tone sandhi</label>
+      <label class="toggle"><input type="checkbox" id="tog-sandhi" checked><span class="slider"></span></label>
+    </div>
+  </div>
   <div class="toggle-row">
     <label class="name" for="tog-stroke">Stroke</label>
     <label class="toggle"><input type="checkbox" id="tog-stroke" checked><span class="slider"></span></label>
@@ -273,10 +298,6 @@
   <div class="toggle-row">
     <label class="name" for="tog-shadow">Shadow</label>
     <label class="toggle"><input type="checkbox" id="tog-shadow"><span class="slider"></span></label>
-  </div>
-  <div class="toggle-row">
-    <label class="name" for="tog-sandhi">Tone sandhi</label>
-    <label class="toggle"><input type="checkbox" id="tog-sandhi" checked><span class="slider"></span></label>
   </div>
 
 
