@@ -210,14 +210,20 @@
   }
 
   const T3_TO_T2 = { 'ǎ': 'á', 'ě': 'é', 'ǐ': 'í', 'ǒ': 'ó', 'ǔ': 'ú', 'ǚ': 'ǘ' };
-  /** Converts a 3rd-tone pinyin syllable to 2nd tone. */
+  const T1_TO_T2 = { 'ā': 'á', 'ē': 'é', 'ī': 'í', 'ō': 'ó', 'ū': 'ú', 'ǖ': 'ǘ' };
+  const T1_TO_T4 = { 'ā': 'à', 'ē': 'è', 'ī': 'ì', 'ō': 'ò', 'ū': 'ù', 'ǖ': 'ǜ' };
+  const T4_TO_T2 = { 'à': 'á', 'è': 'é', 'ì': 'í', 'ò': 'ó', 'ù': 'ú', 'ǜ': 'ǘ' };
   function tone3to2(py) { return py.replace(/[ǎěǐǒǔǚ]/g, c => T3_TO_T2[c]); }
+  function tone1to2(py) { return py.replace(/[āēīōūǖ]/g, c => T1_TO_T2[c]); }
+  function tone1to4(py) { return py.replace(/[āēīōūǖ]/g, c => T1_TO_T4[c]); }
+  function tone4to2(py) { return py.replace(/[àèìòùǜ]/g, c => T4_TO_T2[c]); }
 
   /**
-   * Returns a corrected pinyin array by:
-   *  1. Overriding char-by-char pinyin-pro readings with cedict word-level entries
-   *     (this fixes neutral tones that pinyin-pro misses in context)
-   *  2. Applying the 3+3 tone sandhi rule left-to-right
+   * Applies all standard Mandarin tone sandhi rules:
+   *  Pass 1 — cedict word-level lookup: overrides char-by-char pinyin-pro readings,
+   *            fixing neutral tones that pinyin-pro misses in context.
+   *  Pass 2 — 3rd+3rd sandhi: T3 before T3 → T2 (left-to-right, handles chains).
+   *  Pass 3 — 一/不 sandhi: 一+T4→yí, 一+T1/2/3→yì; 不+T4→bú.
    * @param {string[]} chars
    * @param {string[]} pinyinArr
    * @returns {{ corrected: string[], correctedSet: Set<number> }}
@@ -252,6 +258,24 @@
     for (let i = 0; i < result.length - 1; i++) {
       if (pinyinTone(result[i]) === 3 && pinyinTone(result[i + 1]) === 3) {
         result[i] = tone3to2(result[i]);
+        correctedSet.add(i);
+      }
+    }
+
+    // Pass 3: 一 and 不 sandhi
+    for (let i = 0; i < chars.length; i++) {
+      if (chars[i] === '一') {
+        const nextTone = i + 1 < result.length ? pinyinTone(result[i + 1]) : 0;
+        if (nextTone === 4) {
+          result[i] = tone1to2(result[i]);
+        } else if (nextTone >= 1 && nextTone <= 3) {
+          result[i] = tone1to4(result[i]);
+        } else {
+          continue;
+        }
+        correctedSet.add(i);
+      } else if (chars[i] === '不' && i + 1 < result.length && pinyinTone(result[i + 1]) === 4) {
+        result[i] = tone4to2(result[i]);
         correctedSet.add(i);
       }
     }
