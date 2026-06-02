@@ -2,7 +2,7 @@
 
 /**
  * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
- *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean, showPinyin: boolean }} Config
+ *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean, showPinyin: boolean, toneSandhi: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -61,6 +61,8 @@
     .hpf-tip-word { font-size: 28px; color: #fff; font-weight: normal; }
     .hpf-tip-pinyin { font-size: 13px; color: #f0c040; margin-top: 2px; }
     .hpf-tip-defs { font-size: 12px; color: #ccc; margin-top: 6px; }
+    .hpf-box ruby.hpf-sandhi rt { color: #ffaa44; }
+    .hpf-box ruby.hpf-sandhi { text-decoration: underline dotted rgba(255,170,68,0.5); text-underline-offset: 2px; }
   `;
   document.head.appendChild(styleEl);
 
@@ -96,7 +98,7 @@
     fontScale: 100, subPosition: 8,
     zhTrack: '', enTrack: '',
     zhColor: '#ffffff', enColor: '#ffe97a',
-    stroke: true, window: false, shadow: false, showPinyin: true,
+    stroke: true, window: false, shadow: false, showPinyin: true, toneSandhi: true,
   };
 
   /** @type {Config} */
@@ -196,6 +198,66 @@
       if (entry) return { word, pinyin: entry[0], defs: entry[1] };
     }
     return null;
+  }
+
+  // ── Tone sandhi helpers ────────────────────────────────────────────────────
+  /** Returns the tone number (1-5) of a pinyin syllable based on its diacritic mark. */
+  function pinyinTone(py) {
+    if (/[āēīōūǖ]/.test(py)) return 1;
+    if (/[áéíóúǘ]/.test(py)) return 2;
+    if (/[ǎěǐǒǔǚ]/.test(py)) return 3;
+    if (/[àèìòùǜ]/.test(py)) return 4;
+    return 5;
+  }
+
+  const T3_TO_T2 = { 'ǎ': 'á', 'ě': 'é', 'ǐ': 'í', 'ǒ': 'ó', 'ǔ': 'ú', 'ǚ': 'ǘ' };
+  /** Converts a 3rd-tone pinyin syllable to 2nd tone. */
+  function tone3to2(py) { return py.replace(/[ǎěǐǒǔǚ]/g, c => T3_TO_T2[c]); }
+
+  /**
+   * Returns a corrected pinyin array by:
+   *  1. Overriding char-by-char pinyin-pro readings with cedict word-level entries
+   *     (this fixes neutral tones that pinyin-pro misses in context)
+   *  2. Applying the 3+3 tone sandhi rule left-to-right
+   * @param {string[]} chars
+   * @param {string[]} pinyinArr
+   * @returns {{ corrected: string[], correctedSet: Set<number> }}
+   */
+  function buildCorrectedPinyin(chars, pinyinArr) {
+    const result = pinyinArr.slice();
+    const correctedSet = new Set();
+
+    // Pass 1: cedict word-level lookup (corrects neutral tones)
+    let i = 0;
+    while (i < chars.length) {
+      let matched = false;
+      for (let len = Math.min(8, chars.length - i); len >= 2; len--) {
+        const entry = hpfDict[chars.slice(i, i + len).join('')];
+        if (entry) {
+          const syls = entry[0].split(' ');
+          if (syls.length === len) {
+            for (let j = 0; j < len; j++) {
+              if (result[i + j] !== syls[j]) {
+                result[i + j] = syls[j];
+                correctedSet.add(i + j);
+              }
+            }
+            i += len; matched = true; break;
+          }
+        }
+      }
+      if (!matched) i++;
+    }
+
+    // Pass 2: 3+3 sandhi (left-to-right scan handles chains: ni3 hao3 hao3 → ni2 hao2 hao3)
+    for (let i = 0; i < result.length - 1; i++) {
+      if (pinyinTone(result[i]) === 3 && pinyinTone(result[i + 1]) === 3) {
+        result[i] = tone3to2(result[i]);
+        correctedSet.add(i);
+      }
+    }
+
+    return { corrected: result, correctedSet };
   }
 
   // ── Tooltip hover ──────────────────────────────────────────────────────────
@@ -313,20 +375,25 @@
     const lib = /** @type {any} */ (globalThis.pinyinPro);
     if (!lib) return escapeHtml(text);
     const chars = [...text];
-    const pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
+    let pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
     if (pinyinArr.length !== chars.length) return escapeHtml(text);
+    let correctedSet = /** @type {Set<number>} */ (new Set());
+    if (cfg.toneSandhi && hpfDict) {
+      ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
+    }
     return chars.map((char, i) => {
       const py = pinyinArr[i] || '';
       const escaped = escapeHtml(char);
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
-        return `<ruby data-idx="${i}">${escaped}<rt>${py}</rt></ruby>`;
+        const cls = correctedSet.has(i) ? ' class="hpf-sandhi"' : '';
+        return `<ruby data-idx="${i}"${cls}>${escaped}<rt>${py}</rt></ruby>`;
       }
       return escaped;
     }).join('');
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null);
+  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null);
 
   function tick() {
     attachOverlay();
@@ -361,16 +428,18 @@
 
     const showPinyinChanged = cfg.showPinyin !== lastShowPinyin;
     if (showPinyinChanged) lastShowPinyin = cfg.showPinyin;
+    const toneSandhiChanged = cfg.toneSandhi !== lastToneSandhi;
+    if (toneSandhiChanged) lastToneSandhi = cfg.toneSandhi;
 
     const zhIsZh = /^zh/i.test(cfg.zhTrack || '');
     const enIsZh = /^zh/i.test(cfg.enTrack || '');
 
-    if (zh !== lastZh || showPinyinChanged) {
+    if (zh !== lastZh || showPinyinChanged || toneSandhiChanged) {
       lastZh = zh;
       if (cfg.showPinyin && zhIsZh) zhBox.innerHTML = renderRuby(zh);
       else zhBox.textContent = zh;
     }
-    if (en !== lastEn || showPinyinChanged) {
+    if (en !== lastEn || showPinyinChanged || toneSandhiChanged) {
       lastEn = en;
       if (cfg.showPinyin && enIsZh) enBox.innerHTML = renderRuby(en);
       else enBox.textContent = en;
