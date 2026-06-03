@@ -9,7 +9,7 @@
   'use strict';
 
   const CHANNEL = 'hpf-main-isolated';
-  const LOG = (...a) => console.log('[HPF main]', ...a);
+  const LOG = (...a) => false;
   /** @param {number} ms @returns {Promise<void>} */
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 

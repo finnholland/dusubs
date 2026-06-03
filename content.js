@@ -2,7 +2,7 @@
 
 /**
  * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
- *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean, showPinyin: boolean }} Config
+ *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean, showPinyin: boolean, toneSandhi: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -15,23 +15,28 @@
   const styleEl = document.createElement('style');
   styleEl.textContent = `
     #hpf-root {
-      position: fixed;
+      position: absolute;
       z-index: 2147483647;
       pointer-events: none;
       display: flex;
       flex-direction: column;
       align-items: center;
+      left: 50%;
       transform: translateX(-50%);
+      max-width: 90%;
     }
     .hpf-box {
       width: max-content;
       max-width: 100%;
       text-align: center;
       flex-shrink: 0;
+      transition: opacity 0.15s ease;
     }
     .hpf-box ruby {
       letter-spacing: 0;
       margin-right: 0.15em;
+      pointer-events: auto;
+      cursor: default;
     }
     .hpf-box rt {
       font-family: Arial, sans-serif;
@@ -39,6 +44,46 @@
       line-height: 1.2;
       letter-spacing: 0;
     }
+    #hpf-tooltip {
+      position: fixed;
+      z-index: 2147483647;
+      background: rgba(10,10,10,0.85);
+      backdrop-filter: blur(4px);
+      color: #eee;
+      border: 1px solid #44446a;
+      border-radius: 8px;
+      padding: 10px 14px;
+      max-width: 320px;
+      font-family: sans-serif;
+      line-height: 1.4;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+    #hpf-tooltip.hpf-tip-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .hpf-tip-word { font-size: 28px; font-weight: normal; }
+    .hpf-tip-pinyin { font-size: 16px; margin-top: 2px; }
+    .hpf-tip-defs { font-size: 14px; color: #ccc; margin-top: 6px; }
+    .hpf-tip-save {
+      display: block;
+      margin-top: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid #44446a;
+      border-radius: 4px;
+      color: #eee;
+      cursor: pointer;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .hpf-tip-save:hover { background: rgba(255,255,255,0.2); }
+    .hpf-tip-save.saved { color: #7ef07e; border-color: #7ef07e; }
+    .hpf-box rt { color: #fff; }
   `;
   document.head.appendChild(styleEl);
 
@@ -48,8 +93,22 @@
   root.appendChild(zhBox);
   root.appendChild(enBox);
 
+  const tooltip = document.createElement('div'); tooltip.id = 'hpf-tooltip';
+
+  // Player containers — overlay is appended here so scrolling is handled by the DOM
+  const PLAYER_SEL = '.html5-video-player, .bpx-player-container';
+  let overlayContainer = null;
+
   function attachOverlay() {
-    if (!document.body.contains(root)) document.body.appendChild(root);
+    const player = document.querySelector(PLAYER_SEL);
+    const target = player || document.body;
+    if (overlayContainer !== target || !target.contains(root)) {
+      overlayContainer = target;
+      target.appendChild(root);
+      // Fall back to fixed positioning when we can't find a player container
+      root.style.position = player ? 'absolute' : 'fixed';
+    }
+    if (!document.body.contains(tooltip)) document.body.appendChild(tooltip);
   }
   if (document.body) attachOverlay();
   else document.addEventListener('DOMContentLoaded', attachOverlay);
@@ -60,16 +119,20 @@
     fontScale: 100, subPosition: 8,
     zhTrack: '', enTrack: '',
     zhColor: '#ffffff', enColor: '#ffe97a',
-    stroke: true, window: false, shadow: false, showPinyin: true,
+    stroke: true, window: false, shadow: false, showPinyin: true, toneSandhi: true,
   };
 
   /** @type {Config} */
   let cfg = { ...DEFAULTS };
 
-  browser.storage.local.get(DEFAULTS).then(s => {
+  /** @type {Set<string>} */
+  const savedZh = new Set();
+
+  browser.storage.local.get({ ...DEFAULTS, savedWords: {} }).then(s => {
     cfg = s;
     LOG('cfg:', JSON.stringify(cfg));
     applyStyle();
+    for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
   });
 
   browser.storage.onChanged.addListener((changes, area) => {
@@ -93,34 +156,33 @@
     let baseSz = 40;
     if (sample) { const sz = parseFloat(getComputedStyle(sample).fontSize); if (sz) baseSz = sz; }
     const zhSz = Math.round(baseSz * scale);
-    const enSz = Math.round(zhSz * 0.8);
+    const defaultSize = Math.round(zhSz * .8);
 
     const stroke = cfg.stroke ? '3px #000' : '0px #000';
     const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
     const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
 
-    zhBox.style.cssText = `
-      font-family: sans-serif;
-      font-size: ${zhSz}px;
-      color: ${cfg.zhColor};
-      line-height: ${cfg.showPinyin ? 'normal' : '1.3'};
-      letter-spacing: 0.25em;
-      -webkit-text-stroke: ${stroke};
-      paint-order: stroke fill;
-      text-shadow: ${shadow};
-      ${winBg}
-    `;
-    enBox.style.cssText = `
+    const defaultBoxStyle = `
       font-family: Arial, sans-serif;
-      font-size: ${enSz}px;
-      color: ${cfg.enColor};
       line-height: 1.4;
       -webkit-text-stroke: ${stroke};
       paint-order: stroke fill;
       text-shadow: ${shadow};
-      margin-top: 4px;
       ${winBg}
     `;
+    // Chinese-specific kerning — only applied when the track is actually Chinese
+    const zhKerning = `
+      font-family: sans-serif;
+      letter-spacing: ${cfg.showPinyin ? '0' : '.15em'};
+      line-height: 'normal';
+      font-size: ${zhSz}px; 
+    `;
+
+    const zhTrackIsChinese = /^zh/i.test(cfg.zhTrack || '');
+    const enTrackIsChinese = /^zh/i.test(cfg.enTrack || '');
+
+    zhBox.style.cssText = defaultBoxStyle + `font-size: ${zhTrackIsChinese ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
+    enBox.style.cssText = defaultBoxStyle + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + (enTrackIsChinese ? zhKerning : '');
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
     if (!cfg.zhTrack && !cfg.enTrack) showSiteSubs();
@@ -131,6 +193,204 @@
     return [...document.querySelectorAll(selector)]
       .map(el => el.textContent.trim()).filter(Boolean).join(' ');
   }
+
+  // ── Dictionary ─────────────────────────────────────────────────────────────
+  /** @type {Record<string, [string, string]> | null} */
+  let hpfDict = null;
+  let dictLoading = false;
+
+  async function loadDict() {
+    if (hpfDict || dictLoading) return;
+    dictLoading = true;
+    try {
+      const resp = await fetch(browser.runtime.getURL('cedict.json'));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      hpfDict = await resp.json();
+      LOG('dict loaded:', Object.keys(hpfDict).length, 'entries');
+    } catch (e) {
+      LOG('dict load failed:', e);
+      dictLoading = false;
+    }
+  }
+
+  /** @param {string} text @param {number} idx */
+  function lookupWord(text, idx) {
+    if (!hpfDict) return null;
+    const chars = [...text];
+    for (let len = Math.min(8, chars.length - idx); len >= 1; len--) {
+      const word = chars.slice(idx, idx + len).join('');
+      const entry = hpfDict[word];
+      if (entry) return { word, pinyin: entry[0], defs: entry[1] };
+    }
+    return null;
+  }
+
+  // ── Tone sandhi helpers ────────────────────────────────────────────────────
+  /** Returns the tone number (1-5) of a pinyin syllable based on its diacritic mark. */
+  function pinyinTone(py) {
+    if (/[āēīōūǖ]/.test(py)) return 1;
+    if (/[áéíóúǘ]/.test(py)) return 2;
+    if (/[ǎěǐǒǔǚ]/.test(py)) return 3;
+    if (/[àèìòùǜ]/.test(py)) return 4;
+    return 5;
+  }
+
+  const T3_TO_T2 = { 'ǎ': 'á', 'ě': 'é', 'ǐ': 'í', 'ǒ': 'ó', 'ǔ': 'ú', 'ǚ': 'ǘ' };
+  const T1_TO_T2 = { 'ā': 'á', 'ē': 'é', 'ī': 'í', 'ō': 'ó', 'ū': 'ú', 'ǖ': 'ǘ' };
+  const T1_TO_T4 = { 'ā': 'à', 'ē': 'è', 'ī': 'ì', 'ō': 'ò', 'ū': 'ù', 'ǖ': 'ǜ' };
+  const T4_TO_T2 = { 'à': 'á', 'è': 'é', 'ì': 'í', 'ò': 'ó', 'ù': 'ú', 'ǜ': 'ǘ' };
+  function tone3to2(py) { return py.replace(/[ǎěǐǒǔǚ]/g, c => T3_TO_T2[c]); }
+  function tone1to2(py) { return py.replace(/[āēīōūǖ]/g, c => T1_TO_T2[c]); }
+  function tone1to4(py) { return py.replace(/[āēīōūǖ]/g, c => T1_TO_T4[c]); }
+  function tone4to2(py) { return py.replace(/[àèìòùǜ]/g, c => T4_TO_T2[c]); }
+
+  /**
+   * Applies all standard Mandarin tone sandhi rules:
+   *  Pass 1 — cedict word-level lookup: overrides char-by-char pinyin-pro readings,
+   *            fixing neutral tones that pinyin-pro misses in context.
+   *  Pass 2 — 3rd+3rd sandhi: T3 before T3 → T2 (left-to-right, handles chains).
+   *  Pass 3 — 一/不 sandhi: 一+T4→yí, 一+T1/2/3→yì; 不+T4→bú.
+   * @param {string[]} chars
+   * @param {string[]} pinyinArr
+   * @returns {{ corrected: string[], correctedSet: Set<number> }}
+   */
+  function buildCorrectedPinyin(chars, pinyinArr) {
+    const result = pinyinArr.slice();
+    const correctedSet = new Set();
+
+    // Pass 1: cedict word-level lookup (corrects neutral tones)
+    let i = 0;
+    while (i < chars.length) {
+      let matched = false;
+      for (let len = Math.min(8, chars.length - i); len >= 2; len--) {
+        const entry = hpfDict[chars.slice(i, i + len).join('')];
+        if (entry) {
+          const syls = entry[0].split(' ');
+          if (syls.length === len) {
+            for (let j = 0; j < len; j++) {
+              if (result[i + j] !== syls[j]) {
+                result[i + j] = syls[j];
+                correctedSet.add(i + j);
+              }
+            }
+            i += len; matched = true; break;
+          }
+        }
+      }
+      if (!matched) i++;
+    }
+
+    // Pass 2: 3+3 sandhi (left-to-right scan handles chains: ni3 hao3 hao3 → ni2 hao2 hao3)
+    for (let i = 0; i < result.length - 1; i++) {
+      if (pinyinTone(result[i]) === 3 && pinyinTone(result[i + 1]) === 3) {
+        result[i] = tone3to2(result[i]);
+        correctedSet.add(i);
+      }
+    }
+
+    // Pass 3: 一 and 不 sandhi
+    for (let i = 0; i < chars.length; i++) {
+      if (chars[i] === '一') {
+        const nextTone = i + 1 < result.length ? pinyinTone(result[i + 1]) : 0;
+        if (nextTone === 4) {
+          result[i] = tone1to2(result[i]);
+        } else if (nextTone >= 1 && nextTone <= 3) {
+          result[i] = tone1to4(result[i]);
+        } else {
+          continue;
+        }
+        correctedSet.add(i);
+      } else if (chars[i] === '不' && i + 1 < result.length && pinyinTone(result[i + 1]) === 4) {
+        result[i] = tone4to2(result[i]);
+        correctedSet.add(i);
+      }
+    }
+
+    return { corrected: result, correctedSet };
+  }
+
+  // ── Tooltip hover ──────────────────────────────────────────────────────────
+  let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
+
+  function positionTooltip() {
+    const r = zhBox.getBoundingClientRect();
+    const gap = 8;
+    let top = r.top - tooltip.offsetHeight - gap;
+    if (top < gap) top = r.bottom + gap;
+    let left = r.left + r.width / 2 - tooltip.offsetWidth / 2;
+    left = Math.max(gap, Math.min(left, window.innerWidth - tooltip.offsetWidth - gap));
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  }
+
+  function hideTooltip() {
+    tooltip.classList.remove('hpf-tip-visible');
+  }
+
+  function startFade() {
+    fadeTimer = setTimeout(hideTooltip, 250);
+  }
+
+  /** @param {{ word: string, pinyin: string, defs: string }} result */
+  function showTooltip(result) {
+    clearTimeout(fadeTimer);
+    fadeTimer = undefined;
+    const alreadySaved = savedZh.has(result.word);
+    tooltip.innerHTML =
+      `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
+      `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
+      `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>` +
+      `<button class="hpf-tip-save${alreadySaved ? ' saved' : ''}">${alreadySaved ? 'Saved ✓' : 'Save word'}</button>`;
+    const saveBtn = tooltip.querySelector('.hpf-tip-save');
+    if (saveBtn) saveBtn.addEventListener('click', () =>
+      savedZh.has(result.word) ? unsaveWord(result) : saveWord(result));
+    tooltip.classList.add('hpf-tip-visible');
+    positionTooltip();
+  }
+
+  /** @param {{ word: string, pinyin: string, defs: string }} result */
+  function saveWord(result) {
+    const video = document.querySelector('video');
+    const t = video ? video.currentTime - 2 : 0;
+    const sep = location.href.includes('?') ? '&' : '?';
+    const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
+    const url = baseUrl + sep + 't=' + Math.floor(t);
+    const entry = { zh: result.word, py: result.pinyin, en: result.defs, sentZh: lastZh, sentEn: lastEn, url };
+    browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
+      savedWords[entry.zh] = entry;
+      return browser.storage.local.set({ savedWords });
+    }).then(() => {
+      savedZh.add(entry.zh);
+      const btn = tooltip.querySelector('.hpf-tip-save');
+      if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); }
+    }).catch(err => console.error('storage error:', err));
+  }
+
+  /** @param {{ word: string, pinyin: string, defs: string }} result */
+  function unsaveWord(result) {
+    browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
+      delete savedWords[result.word];
+      return browser.storage.local.set({ savedWords });
+    }).then(() => {
+      savedZh.delete(result.word);
+      const btn = tooltip.querySelector('.hpf-tip-save');
+      if (btn) { btn.textContent = 'Save word'; btn.classList.remove('saved'); }
+    }).catch(err => console.error('storage error:', err));
+  }
+
+  zhBox.addEventListener('mouseover', (e) => {
+    if (!hpfDict) { loadDict(); return; }
+    const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
+    if (!ruby) return;
+    const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
+    const result = lookupWord(lastZh, idx);
+    if (!result) return;
+    showTooltip(result);
+  });
+
+  zhBox.addEventListener('mouseleave', startFade);
+  tooltip.addEventListener('mouseenter', () => { clearTimeout(fadeTimer); fadeTimer = undefined; });
+  tooltip.addEventListener('mouseleave', hideTooltip);
 
   // ── Track data from MAIN world ─────────────────────────────────────────────
   /** @type {Record<string, string> | null} */
@@ -219,27 +479,41 @@
     const lib = /** @type {any} */ (globalThis.pinyinPro);
     if (!lib) return escapeHtml(text);
     const chars = [...text];
-    const pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
+    let pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
     if (pinyinArr.length !== chars.length) return escapeHtml(text);
+    let correctedSet = /** @type {Set<number>} */ (new Set());
+    if (cfg.toneSandhi && hpfDict) {
+      ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
+    }
+    let sandhiColour = cfg.zhColor
+    if (sandhiColour === '#ffffff') sandhiColour = cfg.enColor;
+    if (sandhiColour === '#ffffff') sandhiColour = '#ffe97a';
     return chars.map((char, i) => {
       const py = pinyinArr[i] || '';
       const escaped = escapeHtml(char);
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
-        return `<ruby>${escaped}<rt>${py}</rt></ruby>`;
+        const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
+        correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
+        return `<ruby data-idx="${i}">${escaped}<rt style="color:${rtColor}">${py}</rt></ruby>`;
       }
       return escaped;
     }).join('');
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null);
+  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null);
 
   function tick() {
     attachOverlay();
     applyStyle();
 
     const video = document.querySelector('video');
-    if (video) {
+
+    // When inside a player container, bottom % is relative to its height — no scroll tracking needed.
+    // Fall back to manual fixed positioning if we're on document.body.
+    if (overlayContainer && overlayContainer !== document.body) {
+      root.style.bottom = (cfg.subPosition || 8) + '%';
+    } else if (video) {
       const r = video.getBoundingClientRect();
       root.style.left = (r.left + r.width / 2) + 'px';
       root.style.bottom = (window.innerHeight - r.bottom + r.height * (cfg.subPosition || 8) / 100) + 'px';
@@ -262,18 +536,28 @@
 
     const showPinyinChanged = cfg.showPinyin !== lastShowPinyin;
     if (showPinyinChanged) lastShowPinyin = cfg.showPinyin;
+    const toneSandhiChanged = cfg.toneSandhi !== lastToneSandhi;
+    if (toneSandhiChanged) lastToneSandhi = cfg.toneSandhi;
 
-    if (zh !== lastZh || showPinyinChanged) {
+    const zhIsZh = /^zh/i.test(cfg.zhTrack || '');
+    const enIsZh = /^zh/i.test(cfg.enTrack || '');
+
+    if (zh !== lastZh || showPinyinChanged || toneSandhiChanged) {
       lastZh = zh;
-      if (cfg.showPinyin) zhBox.innerHTML = renderRuby(zh);
+      if (cfg.showPinyin && zhIsZh) zhBox.innerHTML = renderRuby(zh);
       else zhBox.textContent = zh;
     }
-    if (en !== lastEn) { lastEn = en; enBox.textContent = en; }
+    if (en !== lastEn || showPinyinChanged || toneSandhiChanged) {
+      lastEn = en;
+      if (cfg.showPinyin && enIsZh) enBox.innerHTML = renderRuby(en);
+      else enBox.textContent = en;
+    }
 
     zhBox.style.display = zh ? '' : 'none';
     enBox.style.display = (cfg.enTrack && en) ? '' : 'none';
   }
 
+  loadDict();
   setInterval(tick, 80);
 
   // ── Hide YouTube's native subtitles once ours are showing ──────────────────

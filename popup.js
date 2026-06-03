@@ -18,12 +18,14 @@ const togPinyin = /** @type {HTMLInputElement} */ (document.getElementById('tog-
 const togStroke = /** @type {HTMLInputElement} */ (document.getElementById('tog-stroke'));
 const togWindow = /** @type {HTMLInputElement} */ (document.getElementById('tog-window'));
 const togShadow = /** @type {HTMLInputElement} */ (document.getElementById('tog-shadow'));
+const togSandhi = /** @type {HTMLInputElement} */ (document.getElementById('tog-sandhi'));
+const sandhiSub = /** @type {HTMLElement} */ (document.getElementById('sandhi-sub'));
 
 const DEFAULTS = {
   fontScale: 100, subPosition: 8,
   zhTrack: '', enTrack: '',
   zhColor: '#ffffff', enColor: '#ffe97a',
-  stroke: true, window: false, shadow: false, showPinyin: true,
+  stroke: true, window: false, shadow: false, showPinyin: true, toneSandhi: true,
 };
 
 /**
@@ -44,9 +46,11 @@ browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(s => {
   updateSwatch(zhSwatch, s.zhColor);
   updateSwatch(enSwatch, s.enColor);
   togPinyin.checked = s.showPinyin;
+  sandhiSub.classList.toggle('hidden', !s.showPinyin);
   togStroke.checked = s.stroke;
   togWindow.checked = s.window;
   togShadow.checked = s.shadow;
+  togSandhi.checked = s.toneSandhi ?? true;
   populateTracks(s.availableTracks || [], s.zhTrack, s.enTrack);
 });
 
@@ -100,10 +104,14 @@ subPosIn.addEventListener('input', () => {
   browser.storage.local.set({ subPosition: Number(subPosIn.value) });
 });
 
-togPinyin.addEventListener('change', () => browser.storage.local.set({ showPinyin: togPinyin.checked }));
+togPinyin.addEventListener('change', () => {
+  sandhiSub.classList.toggle('hidden', !togPinyin.checked);
+  browser.storage.local.set({ showPinyin: togPinyin.checked });
+});
 togStroke.addEventListener('change', () => browser.storage.local.set({ stroke: togStroke.checked }));
 togWindow.addEventListener('change', () => browser.storage.local.set({ window: togWindow.checked }));
 togShadow.addEventListener('change', () => browser.storage.local.set({ shadow: togShadow.checked }));
+togSandhi.addEventListener('change', () => browser.storage.local.set({ toneSandhi: togSandhi.checked }));
 
 browser.storage.onChanged.addListener((changes) => {
   if ('availableTracks' in changes) {

@@ -142,6 +142,22 @@
       color: #bbb;
     }
 
+    .toggle-sub {
+      padding-left: 14px;
+      transition: opacity 0.15s ease;
+      opacity: 1;
+    }
+
+    .toggle-sub.hidden {
+      opacity: .2;
+      pointer-events: none;
+    }
+
+    .toggle-sub .toggle-row label.name {
+      color: #888;
+      font-size: 11px;
+    }
+
     .toggle {
       position: relative;
       width: 34px;
@@ -216,7 +232,7 @@
         <select id="zh-color">
           <option value="#ffffff">White</option>
           <option value="#ffe97a">Yellow</option>
-          <option value="#ffb3b3">Pink</option>
+          <option value="#F6B8FF">Pink</option>
           <option value="#a8d8ff">Blue</option>
           <option value="#b8ffb8">Green</option>
         </select>
@@ -234,7 +250,7 @@
         <select id="en-color">
           <option value="#ffe97a">Yellow</option>
           <option value="#ffffff">White</option>
-          <option value="#ffb3b3">Pink</option>
+          <option value="#F6B8FF">Pink</option>
           <option value="#a8d8ff">Blue</option>
           <option value="#b8ffb8">Green</option>
         </select>
@@ -261,6 +277,12 @@
   <div class="toggle-row">
     <label class="name" for="tog-pinyin">Pinyin</label>
     <label class="toggle"><input type="checkbox" id="tog-pinyin" checked><span class="slider"></span></label>
+  </div>
+  <div class="toggle-sub" id="sandhi-sub">
+    <div class="toggle-row">
+      <label class="name" for="tog-sandhi">Tone sandhi</label>
+      <label class="toggle"><input type="checkbox" id="tog-sandhi" checked><span class="slider"></span></label>
+    </div>
   </div>
   <div class="toggle-row">
     <label class="name" for="tog-stroke">Stroke</label>

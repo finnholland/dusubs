@@ -1,0 +1,45 @@
+# .github/workflows/release.yml
+name: Build & Release Firefox Extension
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm ci
+
+      - name: Generate dictionary (cedict.json)
+        run: node scripts/make-dict.js
+
+      - name: Build extension
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run build
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Sign extension (via AMO)
+        run: |
+          web-ext sign \
+            --source-dir ./dist \
+            --artifacts-dir ./artifacts \
+            --api-key ${{ secrets.AMO_API_KEY }} \
+            --api-secret ${{ secrets.AMO_API_SECRET }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/*.xpi
+          generate_release_notes: true
