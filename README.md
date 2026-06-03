@@ -63,13 +63,11 @@ youtube-main.js        YouTube player API access (main world)
 background.js          Fetch proxy + webRequest intercept
 popup.html / popup.js  Settings popup
 subtitles.css          (unused legacy stylesheet)
-fonts/
-  Hanzi-Pinyin-Font.top.woff2
-  Hanzi-Pinyin-Font.top.ttf
+cedict.json            CC-CEDICT word list for word-level pinyin correction and definitions
+scripts/
+  make-dict.js         Downloads CC-CEDICT and generates cedict.json
 ```
 
 ## Credits
 
 Pinyin computation by [zh-lx/pinyin-pro](https://github.com/zh-lx/pinyin-pro).
-
-Hanzi-Pinyin font by [jtianling/hanzi-pinyin-font](https://github.com/jtianling/hanzi-pinyin-font) (font files retained, not currently used for rendering).
