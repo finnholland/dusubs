@@ -14,3 +14,4 @@
     ```
 
 4. Export as flashcards (anki, quizlet, etc)
+5. uuid to open in website that renders all your words as flashcards?
