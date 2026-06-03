@@ -25,6 +25,34 @@
       letter-spacing: 0.03em;
     }
 
+    .tabs {
+      display: flex;
+      margin-bottom: 10px;
+      gap: 6px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #252545;
+      color: #888;
+      border: 1px solid #3a3a6a;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: #3a5fd9;
+      color: #fff;
+      border-color: #5577ff;
+    }
+
+    .tab-panel.hidden {
+      display: none;
+    }
+
     .track-row {
       margin-bottom: 8px;
     }
@@ -219,84 +247,181 @@
     a:hover {
       text-decoration: underline;
     }
+
+    #word-list {
+      max-height: 280px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 8px;
+    }
+
+    #word-list:empty::after {
+      content: 'No saved words yet';
+      color: #555;
+      font-size: 12px;
+      text-align: center;
+      padding: 20px 0;
+      display: block;
+    }
+
+    .word-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 2px;
+      border-bottom: 1px solid #2a2a4e;
+    }
+
+    .word-zh {
+      font-size: 20px;
+      color: #fff;
+      flex-shrink: 0;
+      min-width: 32px;
+    }
+
+    .word-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .word-py {
+      font-size: 11px;
+      color: #f0c040;
+    }
+
+    .word-en {
+      font-size: 11px;
+      color: #999;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .word-del {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #555;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 4px;
+      line-height: 1;
+    }
+
+    .word-del:hover {
+      color: #e06060;
+    }
+
+    #export-btn {
+      width: 100%;
+      padding: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #252545;
+      color: #f0c040;
+      border: 1px solid #3a3a6a;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #export-btn:hover {
+      background: #2e2e60;
+    }
+
+    #export-btn:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
   </style>
 </head>
 
 <body>
-  <div class="track-row">
-    <div class="track-label">Top</div>
-    <div class="track-controls">
-      <select id="zh-track"></select>
-      <div class="color-select-wrap">
-        <div class="color-swatch" id="zh-swatch"></div>
-        <select id="zh-color">
-          <option value="#ffffff">White</option>
-          <option value="#ffe97a">Yellow</option>
-          <option value="#F6B8FF">Pink</option>
-          <option value="#a8d8ff">Blue</option>
-          <option value="#b8ffb8">Green</option>
-        </select>
-        <span class="color-arrow">▾</span>
+  <div class="tabs">
+    <button class="tab active" data-tab="settings">Settings</button>
+    <button class="tab" data-tab="words">Saved</button>
+  </div>
+
+  <div id="tab-settings" class="tab-panel">
+    <div class="track-row">
+      <div class="track-label">Top</div>
+      <div class="track-controls">
+        <select id="zh-track"></select>
+        <div class="color-select-wrap">
+          <div class="color-swatch" id="zh-swatch"></div>
+          <select id="zh-color">
+            <option value="#ffffff">White</option>
+            <option value="#ffe97a">Yellow</option>
+            <option value="#F6B8FF">Pink</option>
+            <option value="#a8d8ff">Blue</option>
+            <option value="#b8ffb8">Green</option>
+          </select>
+          <span class="color-arrow">▾</span>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="track-row">
-    <div class="track-label">Bottom</div>
-    <div class="track-controls">
-      <select id="en-track"></select>
-      <div class="color-select-wrap">
-        <div class="color-swatch" id="en-swatch"></div>
-        <select id="en-color">
-          <option value="#ffe97a">Yellow</option>
-          <option value="#ffffff">White</option>
-          <option value="#F6B8FF">Pink</option>
-          <option value="#a8d8ff">Blue</option>
-          <option value="#b8ffb8">Green</option>
-        </select>
-        <span class="color-arrow">▾</span>
+    <div class="track-row">
+      <div class="track-label">Bottom</div>
+      <div class="track-controls">
+        <select id="en-track"></select>
+        <div class="color-select-wrap">
+          <div class="color-swatch" id="en-swatch"></div>
+          <select id="en-color">
+            <option value="#ffe97a">Yellow</option>
+            <option value="#ffffff">White</option>
+            <option value="#F6B8FF">Pink</option>
+            <option value="#a8d8ff">Blue</option>
+            <option value="#b8ffb8">Green</option>
+          </select>
+          <span class="color-arrow">▾</span>
+        </div>
       </div>
     </div>
-  </div>
 
-  <hr class="divider">
+    <hr class="divider">
 
-  <div class="slider-row">
-    <label for="font-scale">Scale</label>
-    <span id="font-scale-val">100%</span>
-    <input type="range" id="font-scale" min="50" max="200" step="5" value="100">
-  </div>
-  <div class="slider-row">
-    <label for="sub-position">Position</label>
-    <span id="sub-position-val">8%</span>
-    <input type="range" id="sub-position" min="0" max="40" step="1" value="8">
-  </div>
+    <div class="slider-row">
+      <label for="font-scale">Scale</label>
+      <span id="font-scale-val">100%</span>
+      <input type="range" id="font-scale" min="50" max="200" step="5" value="100">
+    </div>
+    <div class="slider-row">
+      <label for="sub-position">Position</label>
+      <span id="sub-position-val">8%</span>
+      <input type="range" id="sub-position" min="0" max="40" step="1" value="8">
+    </div>
 
-  <hr class="divider">
+    <hr class="divider">
 
-  <div class="toggle-row">
-    <label class="name" for="tog-pinyin">Pinyin</label>
-    <label class="toggle"><input type="checkbox" id="tog-pinyin" checked><span class="slider"></span></label>
-  </div>
-  <div class="toggle-sub" id="sandhi-sub">
     <div class="toggle-row">
-      <label class="name" for="tog-sandhi">Tone sandhi</label>
-      <label class="toggle"><input type="checkbox" id="tog-sandhi" checked><span class="slider"></span></label>
+      <label class="name" for="tog-pinyin">Pinyin</label>
+      <label class="toggle"><input type="checkbox" id="tog-pinyin" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-sub" id="sandhi-sub">
+      <div class="toggle-row">
+        <label class="name" for="tog-sandhi">Tone sandhi</label>
+        <label class="toggle"><input type="checkbox" id="tog-sandhi" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <label class="name" for="tog-stroke">Stroke</label>
+      <label class="toggle"><input type="checkbox" id="tog-stroke" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <label class="name" for="tog-window">Window</label>
+      <label class="toggle"><input type="checkbox" id="tog-window"><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <label class="name" for="tog-shadow">Shadow</label>
+      <label class="toggle"><input type="checkbox" id="tog-shadow"><span class="slider"></span></label>
     </div>
   </div>
-  <div class="toggle-row">
-    <label class="name" for="tog-stroke">Stroke</label>
-    <label class="toggle"><input type="checkbox" id="tog-stroke" checked><span class="slider"></span></label>
-  </div>
-  <div class="toggle-row">
-    <label class="name" for="tog-window">Window</label>
-    <label class="toggle"><input type="checkbox" id="tog-window"><span class="slider"></span></label>
-  </div>
-  <div class="toggle-row">
-    <label class="name" for="tog-shadow">Shadow</label>
-    <label class="toggle"><input type="checkbox" id="tog-shadow"><span class="slider"></span></label>
-  </div>
 
+  <div id="tab-words" class="tab-panel hidden">
+    <div id="word-list"></div>
+    <button id="export-btn" disabled>Export all</button>
+  </div>
 
   <script src="popup.js"></script>
 </body>

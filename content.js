@@ -147,6 +147,22 @@
     }
     applyStyle();
     if (trackChanged && lastTrackUrls) fetchSubtitles(lastTrackUrls);
+
+    if ('savedWords' in changes) {
+      const oldKeys = new Set(Object.keys(changes.savedWords.oldValue || {}));
+      const newKeys = new Set(Object.keys(changes.savedWords.newValue || {}));
+      for (const zh of oldKeys) if (!newKeys.has(zh)) savedZh.delete(zh);
+      for (const zh of newKeys) if (!oldKeys.has(zh)) savedZh.add(zh);
+
+      const tipWord = tooltip.querySelector('.hpf-tip-word');
+      const btn = tooltip.querySelector('.hpf-tip-save');
+      if (tipWord && btn && tooltip.classList.contains('hpf-tip-visible')) {
+        const zh = tipWord.textContent;
+        const isSaved = savedZh.has(zh);
+        btn.textContent = isSaved ? 'Saved ✓' : 'Save word';
+        btn.classList.toggle('saved', isSaved);
+      }
+    }
   });
 
   // ── Apply styles ───────────────────────────────────────────────────────────
