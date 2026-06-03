@@ -298,19 +298,26 @@
       text-overflow: ellipsis;
     }
 
-    .word-del {
+    .word-del,
+    .word-link {
       flex-shrink: 0;
       background: none;
       border: none;
       color: #555;
       cursor: pointer;
-      font-size: 14px;
       padding: 2px 4px;
       line-height: 1;
+      display: flex;
+      align-items: center;
+      text-decoration: none;
     }
 
     .word-del:hover {
       color: #e06060;
+    }
+
+    .word-link:hover {
+      color: #6090e0;
     }
 
     #export-btn {
