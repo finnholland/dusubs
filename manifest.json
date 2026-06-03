@@ -41,9 +41,15 @@
       ]
     }
   ],
+  "icons": {
+    "512": "icon.png"
+  },
   "browser_action": {
     "default_popup": "popup.html",
-    "default_title": "Hanzi Pinyin Subtitles"
+    "default_title": "Hanzi Pinyin Subtitles",
+    "default_icon": {
+      "512": "icon.png"
+    }
   },
   "web_accessible_resources": [
     "fonts/Hanzi-Pinyin-Font.top.woff2",

@@ -33,7 +33,7 @@ jobs:
       - name: Sign extension (via AMO)
         run: |
           web-ext sign \
-            --source-dir ./dist \
+            --source-dir . \
             --artifacts-dir ./artifacts \
             --api-key ${{ secrets.AMO_API_KEY }} \
             --api-secret ${{ secrets.AMO_API_SECRET }}
