@@ -138,6 +138,9 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+const TRASH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+const LINK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+
 function loadWords() {
   browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
     const list = document.getElementById('word-list');
@@ -149,10 +152,11 @@ function loadWords() {
       row.innerHTML =
         `<span class="word-zh">${escHtml(w.zh)}</span>` +
         `<span class="word-meta">` +
-          `<div class="word-py">${escHtml(w.py)}</div>` +
-          `<div class="word-en">${escHtml(w.en)}</div>` +
+        `<div class="word-py">${escHtml(w.py)}</div>` +
+        `<div class="word-en">${escHtml(w.en)}</div>` +
         `</span>` +
-        `<button class="word-del" title="Remove">🗑</button>`;
+        (w.url ? `<a class="word-link" href="${escHtml(w.url)}" target="_blank" title="Open video at time">${LINK_SVG}</a>` : '') +
+        `<button class="word-del" title="Remove">${TRASH_SVG}</button>`;
       row.querySelector('.word-del').addEventListener('click', () => deleteWord(w.zh));
       list.appendChild(row);
     });
