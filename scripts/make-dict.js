@@ -84,8 +84,8 @@ async function build(inputStream) {
     const entry = parseLine(line);
     if (!entry) continue;
     const val = [entry.pinyin, entry.defs];
-    dict[entry.simp] = val;
-    if (entry.trad !== entry.simp) dict[entry.trad] = val;
+    if (!dict[entry.simp]) dict[entry.simp] = val;
+    if (entry.trad !== entry.simp && !dict[entry.trad]) dict[entry.trad] = val;
     count++;
     if (count % 10000 === 0) process.stdout.write(`\r  ${count} entries parsed...`);
   }
