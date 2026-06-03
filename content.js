@@ -125,10 +125,14 @@
   /** @type {Config} */
   let cfg = { ...DEFAULTS };
 
-  browser.storage.local.get(DEFAULTS).then(s => {
+  /** @type {Set<string>} */
+  const savedZh = new Set();
+
+  browser.storage.local.get({ ...DEFAULTS, savedWords: {} }).then(s => {
     cfg = s;
     LOG('cfg:', JSON.stringify(cfg));
     applyStyle();
+    for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
   });
 
   browser.storage.onChanged.addListener((changes, area) => {
@@ -324,20 +328,22 @@
   }
 
   function startFade() {
-    fadeTimer = setTimeout(hideTooltip, 150);
+    fadeTimer = setTimeout(hideTooltip, 250);
   }
 
   /** @param {{ word: string, pinyin: string, defs: string }} result */
   function showTooltip(result) {
     clearTimeout(fadeTimer);
     fadeTimer = undefined;
+    const alreadySaved = savedZh.has(result.word);
     tooltip.innerHTML =
       `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
       `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
       `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>` +
-      `<button class="hpf-tip-save">Save word</button>`;
+      `<button class="hpf-tip-save${alreadySaved ? ' saved' : ''}">${alreadySaved ? 'Saved ✓' : 'Save word'}</button>`;
     const saveBtn = tooltip.querySelector('.hpf-tip-save');
-    if (saveBtn) saveBtn.addEventListener('click', () => saveWord(result));
+    if (saveBtn) saveBtn.addEventListener('click', () =>
+      savedZh.has(result.word) ? unsaveWord(result) : saveWord(result));
     tooltip.classList.add('hpf-tip-visible');
     positionTooltip();
   }
@@ -345,17 +351,31 @@
   /** @param {{ word: string, pinyin: string, defs: string }} result */
   function saveWord(result) {
     const video = document.querySelector('video');
-    const t = video ? video.currentTime + 2 : 0;
+    const t = video ? video.currentTime - 2 : 0;
     const sep = location.href.includes('?') ? '&' : '?';
     const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
     const url = baseUrl + sep + 't=' + Math.floor(t);
     const entry = { zh: result.word, py: result.pinyin, en: result.defs, sentZh: lastZh, sentEn: lastEn, url };
-    browser.storage.local.get({ savedWords: /** @type {any[]} */ ([]) }).then(({ savedWords }) => {
-      savedWords.push(entry);
-      browser.storage.local.set({ savedWords });
+    browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
+      savedWords[entry.zh] = entry;
+      return browser.storage.local.set({ savedWords });
+    }).then(() => {
+      savedZh.add(entry.zh);
       const btn = tooltip.querySelector('.hpf-tip-save');
       if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); }
-    });
+    }).catch(err => console.error('storage error:', err));
+  }
+
+  /** @param {{ word: string, pinyin: string, defs: string }} result */
+  function unsaveWord(result) {
+    browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
+      delete savedWords[result.word];
+      return browser.storage.local.set({ savedWords });
+    }).then(() => {
+      savedZh.delete(result.word);
+      const btn = tooltip.querySelector('.hpf-tip-save');
+      if (btn) { btn.textContent = 'Save word'; btn.classList.remove('saved'); }
+    }).catch(err => console.error('storage error:', err));
   }
 
   zhBox.addEventListener('mouseover', (e) => {
