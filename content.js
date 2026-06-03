@@ -53,16 +53,36 @@
       border: 1px solid #44446a;
       border-radius: 8px;
       padding: 10px 14px;
-      pointer-events: none;
       max-width: 320px;
       font-family: sans-serif;
       line-height: 1.4;
-      display: none;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+    #hpf-tooltip.hpf-tip-visible {
+      opacity: 1;
+      pointer-events: auto;
     }
     .hpf-tip-word { font-size: 28px; font-weight: normal; }
     .hpf-tip-pinyin { font-size: 16px; margin-top: 2px; }
     .hpf-tip-defs { font-size: 14px; color: #ccc; margin-top: 6px; }
+    .hpf-tip-save {
+      display: block;
+      margin-top: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid #44446a;
+      border-radius: 4px;
+      color: #eee;
+      cursor: pointer;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .hpf-tip-save:hover { background: rgba(255,255,255,0.2); }
+    .hpf-tip-save.saved { color: #7ef07e; border-color: #7ef07e; }
     .hpf-box rt { color: #fff; }
   `;
   document.head.appendChild(styleEl);
@@ -286,32 +306,71 @@
   }
 
   // ── Tooltip hover ──────────────────────────────────────────────────────────
-  zhBox.addEventListener('mouseover', (e) => {
-    if (!hpfDict) { loadDict(); return; }
-    const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
-    if (!ruby) { tooltip.style.display = 'none'; return; }
-    const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
-    const result = lookupWord(lastZh, idx);
-    if (!result) { tooltip.style.display = 'none'; return; }
+  let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
+
+  function positionTooltip() {
+    const r = zhBox.getBoundingClientRect();
+    const gap = 8;
+    let top = r.top - tooltip.offsetHeight - gap;
+    if (top < gap) top = r.bottom + gap;
+    let left = r.left + r.width / 2 - tooltip.offsetWidth / 2;
+    left = Math.max(gap, Math.min(left, window.innerWidth - tooltip.offsetWidth - gap));
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  }
+
+  function hideTooltip() {
+    tooltip.classList.remove('hpf-tip-visible');
+  }
+
+  function startFade() {
+    fadeTimer = setTimeout(hideTooltip, 150);
+  }
+
+  /** @param {{ word: string, pinyin: string, defs: string }} result */
+  function showTooltip(result) {
+    clearTimeout(fadeTimer);
+    fadeTimer = undefined;
     tooltip.innerHTML =
       `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
       `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
-      `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>`;
-    tooltip.style.display = 'block';
+      `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>` +
+      `<button class="hpf-tip-save">Save word</button>`;
+    const saveBtn = tooltip.querySelector('.hpf-tip-save');
+    if (saveBtn) saveBtn.addEventListener('click', () => saveWord(result));
+    tooltip.classList.add('hpf-tip-visible');
+    positionTooltip();
+  }
+
+  /** @param {{ word: string, pinyin: string, defs: string }} result */
+  function saveWord(result) {
+    const video = document.querySelector('video');
+    const t = video ? video.currentTime + 2 : 0;
+    const sep = location.href.includes('?') ? '&' : '?';
+    const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
+    const url = baseUrl + sep + 't=' + Math.floor(t);
+    const entry = { zh: result.word, py: result.pinyin, en: result.defs, sentZh: lastZh, sentEn: lastEn, url };
+    browser.storage.local.get({ savedWords: /** @type {any[]} */ ([]) }).then(({ savedWords }) => {
+      savedWords.push(entry);
+      browser.storage.local.set({ savedWords });
+      const btn = tooltip.querySelector('.hpf-tip-save');
+      if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); }
+    });
+  }
+
+  zhBox.addEventListener('mouseover', (e) => {
+    if (!hpfDict) { loadDict(); return; }
+    const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
+    if (!ruby) return;
+    const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
+    const result = lookupWord(lastZh, idx);
+    if (!result) return;
+    showTooltip(result);
   });
 
-  zhBox.addEventListener('mousemove', (e) => {
-    if (tooltip.style.display === 'none') return;
-    const pad = 10;
-    let tx = e.clientX + 16;
-    let ty = e.clientY - tooltip.offsetHeight - 8;
-    if (tx + tooltip.offsetWidth > window.innerWidth - pad) tx = e.clientX - tooltip.offsetWidth - 8;
-    if (ty < pad) ty = e.clientY + 20;
-    tooltip.style.left = tx + 'px';
-    tooltip.style.top = ty + 'px';
-  });
-
-  zhBox.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  zhBox.addEventListener('mouseleave', startFade);
+  tooltip.addEventListener('mouseenter', () => { clearTimeout(fadeTimer); fadeTimer = undefined; });
+  tooltip.addEventListener('mouseleave', hideTooltip);
 
   // ── Track data from MAIN world ─────────────────────────────────────────────
   /** @type {Record<string, string> | null} */
