@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "Hanzi Pinyin Subtitles",
-  "version": "3.0",
-  "description": "Chinese subtitles in Hanzi Pinyin font with optional English below",
+  "name": "Dusub",
+  "version": "1.0",
+  "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
   "permissions": [
     "activeTab",
     "storage",

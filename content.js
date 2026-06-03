@@ -328,10 +328,12 @@
   // ── Tooltip hover ──────────────────────────────────────────────────────────
   let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
-  function positionTooltip() {
-    const r = zhBox.getBoundingClientRect();
+  function positionTooltip(anchor) {
+    const r = (anchor || zhBox).getBoundingClientRect();
     const gap = 8;
-    let top = r.top - tooltip.offsetHeight - gap;
+    const rt = anchor && anchor.querySelector('rt');
+    const rtGap = rt ? rt.getBoundingClientRect().height : 0;
+    let top = r.top - tooltip.offsetHeight - gap - rtGap;
     if (top < gap) top = r.bottom + gap;
     let left = r.left + r.width / 2 - tooltip.offsetWidth / 2;
     left = Math.max(gap, Math.min(left, window.innerWidth - tooltip.offsetWidth - gap));
@@ -347,8 +349,8 @@
     fadeTimer = setTimeout(hideTooltip, 250);
   }
 
-  /** @param {{ word: string, pinyin: string, defs: string }} result */
-  function showTooltip(result) {
+  /** @param {{ word: string, pinyin: string, defs: string }} result @param {Element} [anchor] */
+  function showTooltip(result, anchor) {
     clearTimeout(fadeTimer);
     fadeTimer = undefined;
     const alreadySaved = savedZh.has(result.word);
@@ -361,7 +363,7 @@
     if (saveBtn) saveBtn.addEventListener('click', () =>
       savedZh.has(result.word) ? unsaveWord(result) : saveWord(result));
     tooltip.classList.add('hpf-tip-visible');
-    positionTooltip();
+    positionTooltip(anchor);
   }
 
   /** @param {{ word: string, pinyin: string, defs: string }} result */
@@ -401,7 +403,7 @@
     const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
     const result = lookupWord(lastZh, idx);
     if (!result) return;
-    showTooltip(result);
+    showTooltip(result, ruby);
   });
 
   zhBox.addEventListener('mouseleave', startFade);
@@ -510,7 +512,8 @@
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
         const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
         correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
-        return `<ruby data-idx="${i}">${escaped}<rt style="color:${rtColor}">${py}</rt></ruby>`;
+        const rt = cfg.showPinyin ? `<rt style="color:${rtColor}">${py}</rt>` : '';
+        return `<ruby data-idx="${i}">${escaped}${rt}</ruby>`;
       }
       return escaped;
     }).join('');
@@ -560,12 +563,12 @@
 
     if (zh !== lastZh || showPinyinChanged || toneSandhiChanged) {
       lastZh = zh;
-      if (cfg.showPinyin && zhIsZh) zhBox.innerHTML = renderRuby(zh);
+      if (zhIsZh) zhBox.innerHTML = renderRuby(zh);
       else zhBox.textContent = zh;
     }
     if (en !== lastEn || showPinyinChanged || toneSandhiChanged) {
       lastEn = en;
-      if (cfg.showPinyin && enIsZh) enBox.innerHTML = renderRuby(en);
+      if (enIsZh) enBox.innerHTML = renderRuby(en);
       else enBox.textContent = en;
     }
 
