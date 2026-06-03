@@ -47,7 +47,8 @@
     #hpf-tooltip {
       position: fixed;
       z-index: 2147483647;
-      background: rgba(10,10,30,0.96);
+      background: rgba(10,10,10,0.85);
+      backdrop-filter: blur(4px);
       color: #eee;
       border: 1px solid #44446a;
       border-radius: 8px;
@@ -59,9 +60,9 @@
       display: none;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
-    .hpf-tip-word { font-size: 28px; color: #fff; font-weight: normal; }
-    .hpf-tip-pinyin { font-size: 13px; margin-top: 2px; }
-    .hpf-tip-defs { font-size: 12px; color: #ccc; margin-top: 6px; }
+    .hpf-tip-word { font-size: 28px; font-weight: normal; }
+    .hpf-tip-pinyin { font-size: 16px; margin-top: 2px; }
+    .hpf-tip-defs { font-size: 14px; color: #ccc; margin-top: 6px; }
     .hpf-box rt { color: #fff; }
   `;
   document.head.appendChild(styleEl);
@@ -293,8 +294,8 @@
     const result = lookupWord(lastZh, idx);
     if (!result) { tooltip.style.display = 'none'; return; }
     tooltip.innerHTML =
-      `<div class="hpf-tip-word">${escapeHtml(result.word)}</div>` +
-      `<div class="hpf-tip-pinyin" style="color:${cfg.zhColor}">${escapeHtml(result.pinyin)}</div>` +
+      `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
+      `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
       `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>`;
     tooltip.style.display = 'block';
   });
@@ -405,11 +406,15 @@
     if (cfg.toneSandhi && hpfDict) {
       ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
     }
+    let sandhiColour = cfg.zhColor
+    if (sandhiColour === '#ffffff') sandhiColour = cfg.enColor;
+    if (sandhiColour === '#ffffff') sandhiColour = '#ffe97a';
     return chars.map((char, i) => {
       const py = pinyinArr[i] || '';
       const escaped = escapeHtml(char);
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
-        const rtColor = correctedSet.has(i) ? cfg.zhColor : '#fff';
+        const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
+        correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
         return `<ruby data-idx="${i}">${escaped}<rt style="color:${rtColor}">${py}</rt></ruby>`;
       }
       return escaped;
@@ -417,7 +422,7 @@
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null), sandhiTransitioning = false;
+  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null);
 
   function tick() {
     attachOverlay();
