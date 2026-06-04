@@ -129,6 +129,14 @@
       margin: 10px 0;
     }
 
+    .homepage {
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      font-size: 11px;
+    }
+
     .slider-row {
       display: flex;
       align-items: center;
@@ -399,8 +407,13 @@
     }
 
     @keyframes confirm-shrink {
-      from { width: 100%; }
-      to { width: 0%; }
+      from {
+        width: 100%;
+      }
+
+      to {
+        width: 0%;
+      }
     }
   </style>
 </head>
@@ -485,6 +498,10 @@
       <label class="name" for="tog-shadow">Shadow</label>
       <label class="toggle"><input type="checkbox" id="tog-shadow"><span class="slider"></span></label>
     </div>
+
+    <hr class="divider">
+
+    <a href="https://github.com/finnholland/dusub" class="homepage">Homepage</a>
   </div>
 
   <div id="tab-words" class="tab-panel hidden">
