@@ -201,6 +201,13 @@ function App() {
     browser.storage.local.set({ savedWords: {} }).then(() => setWords({}));
   }
 
+  function toggleExportOpen() {
+    clearTimeout(dismissTimer.current);
+    dismissTimer.current = null;
+    setConfirmDelete(false);
+    setExportOpen(o => !o);
+  }
+
   const wordList = Object.values(words);
 
   return (
@@ -300,7 +307,7 @@ function App() {
             ))}
         </div>
 
-        <button id="export-btn" disabled={wordList.length === 0} onClick={() => setExportOpen(o => !o)}>
+        <button id="export-btn" disabled={wordList.length === 0} onClick={toggleExportOpen}>
           {exportOpen ? 'Cancel' : 'Export all'}
         </button>
         <div id="export-sub-btns" class={exportOpen ? 'visible' : ''}>
@@ -308,13 +315,13 @@ function App() {
           <button class="export-sub-btn" onClick={exportQuizlet}>Quizlet</button>
         </div>
 
-        {confirmDelete &&
+        {!exportOpen && confirmDelete &&
           <button id="confirm-delete-btn" onClick={confirmDeleteAll}>
             Confirm<span id="confirm-bar" />
           </button>
         }
 
-        {!exportOpen &&
+        {!exportOpen && !confirmDelete &&
           <button id="delete-all-btn" disabled={wordList.length === 0} onClick={startDeleteAll}>
             Delete all
           </button>

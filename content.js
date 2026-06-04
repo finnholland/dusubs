@@ -174,8 +174,8 @@
     const zhSz = Math.round(baseSz * scale);
     const defaultSize = Math.round(zhSz * .8);
 
-    const stroke = cfg.stroke ? '3px #000' : '0px #000';
-    const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1), 0 0 7px rgba(0,0,0,.75), 0 0 9px rgba(0,0,0,.5);' : 'none';
+    const stroke = cfg.stroke ? `${defaultSize * 0.1}px #000` : '0px #000';
+    const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
     const defaultBoxStyle = `
       font-family: Arial, sans-serif;
       line-height: 1.4;
