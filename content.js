@@ -175,30 +175,34 @@
     const defaultSize = Math.round(zhSz * .8);
 
     const stroke = cfg.stroke ? '3px #000' : '0px #000';
-    const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
-    const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
-
+    const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1), 0 0 7px rgba(0,0,0,.75), 0 0 9px rgba(0,0,0,.5);' : 'none';
     const defaultBoxStyle = `
       font-family: Arial, sans-serif;
       line-height: 1.4;
+      text-align: center;
       -webkit-text-stroke: ${stroke};
       paint-order: stroke fill;
       text-shadow: ${shadow};
-      ${winBg}
     `;
     // Chinese-specific kerning — only applied when the track is actually Chinese
     const zhKerning = `
       font-family: sans-serif;
       letter-spacing: ${cfg.showPinyin ? '0' : '.15em'};
       line-height: 'normal';
-      font-size: ${zhSz}px; 
+      font-size: ${zhSz}px;
     `;
 
     const zhTrackIsChinese = /^zh/i.test(cfg.zhTrack || '');
     const enTrackIsChinese = /^zh/i.test(cfg.enTrack || '');
 
-    zhBox.style.cssText = defaultBoxStyle + `font-size: ${zhTrackIsChinese ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
-    enBox.style.cssText = defaultBoxStyle + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + (enTrackIsChinese ? zhKerning : '');
+    const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
+    // extra top padding when the zh box is showing pinyin ruby text above characters
+    const zhWinBg = cfg.window
+      ? `background:rgba(0,0,0,0.5);padding:${zhTrackIsChinese && cfg.showPinyin ? '.25em' : '0'} 10px 0;border-radius:3px;`
+      : '';
+
+    zhBox.style.cssText = defaultBoxStyle + zhWinBg + `font-size: ${zhTrackIsChinese ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
+    enBox.style.cssText = defaultBoxStyle + winBg + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + (enTrackIsChinese ? zhKerning : '');
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
     if (!cfg.zhTrack && !cfg.enTrack) showSiteSubs();

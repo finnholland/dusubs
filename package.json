@@ -1,0 +1,13 @@
+{
+  "name": "dusub",
+  "private": true,
+  "scripts": {
+    "build": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact",
+    "watch": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0",
+    "preact": "^10.24.0",
+    "typescript": "^5.6.0"
+  }
+}
