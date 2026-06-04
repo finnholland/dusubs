@@ -15,3 +15,6 @@
 
 4. Export as flashcards (anki, quizlet, etc)
 5. uuid to open in website that renders all your words as flashcards?
+6. japanese (with hirigana romanji and cedict definitions)
+7. french spanish english with dictionaries
+8. Typescript/react rewrite (bundle size, scope size, worth?)

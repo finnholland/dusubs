@@ -73,6 +73,7 @@
 
     .track-controls select {
       flex: 1;
+      min-width: 0;
       background: #252545;
       color: #eee;
       border: 1px solid #3a3a6a;
@@ -320,8 +321,8 @@
       color: #6090e0;
     }
 
-    #export-btn {
-      width: 100%;
+    #export-btn,
+    .export-sub-btn {
       padding: 7px;
       font-size: 12px;
       font-weight: 600;
@@ -332,13 +333,32 @@
       cursor: pointer;
     }
 
-    #export-btn:hover {
+    #export-btn {
+      width: 100%;
+    }
+
+    #export-btn:hover,
+    .export-sub-btn:hover {
       background: #2e2e60;
     }
 
     #export-btn:disabled {
       opacity: 0.3;
       cursor: default;
+    }
+
+    #export-sub-btns {
+      display: none;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    #export-sub-btns.visible {
+      display: flex;
+    }
+
+    .export-sub-btn {
+      flex: 1;
     }
   </style>
 </head>
@@ -428,6 +448,10 @@
   <div id="tab-words" class="tab-panel hidden">
     <div id="word-list"></div>
     <button id="export-btn" disabled>Export all</button>
+    <div id="export-sub-btns">
+      <button class="export-sub-btn" id="export-anki-btn">Anki</button>
+      <button class="export-sub-btn" id="export-quizlet-btn">Quizlet</button>
+    </div>
   </div>
 
   <script src="popup.js"></script>

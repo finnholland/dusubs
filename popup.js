@@ -171,21 +171,51 @@ function deleteWord(zh) {
   }).then(loadWords);
 }
 
-function exportWords() {
-  browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
-    const lines = Object.values(savedWords).map(w => {
-      let back = `${escHtml(w.py)}<br>${escHtml(w.en)}`;
-      if (w.sentEn || w.sentZh) {
-        const sent = [w.sentZh, w.sentEn].filter(Boolean).join(' · ');
-        back += `<br><i>${escHtml(sent)}</i>`;
-      }
-      return `${w.zh}\t${back}`;
-    });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' }));
-    a.download = 'saved-words.txt';
-    a.click();
-  });
+function downloadText(content, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+  a.download = filename;
+  a.click();
 }
 
-document.getElementById('export-btn').addEventListener('click', exportWords);
+function exportAnki(savedWords) {
+  const lines = Object.values(savedWords).map(w => {
+    const en = w.en.split(';').slice(0, 4).join(';');
+    let back = `${escHtml(w.py)}<br>${escHtml(en)}`;
+    if (w.sentEn || w.sentZh) {
+      const sent = [w.sentZh, w.sentEn].filter(Boolean).join(' · ');
+      back += `<br><i>${escHtml(sent)}</i>`;
+    }
+    return `${w.zh}\t${back}`;
+  });
+  downloadText(lines.join('\n'), 'saved-words-anki.txt');
+}
+
+function exportQuizlet(savedWords) {
+  const lines = Object.values(savedWords).map(w => {
+    const en = w.en.split(';').slice(0, 2).join(';');
+    return `${w.zh}\t${w.py} · ${en}`;
+  });
+  downloadText(lines.join('\n'), 'saved-words-quizlet.txt');
+}
+
+const exportBtn = document.getElementById('export-btn');
+const exportSubBtns = document.getElementById('export-sub-btns');
+
+exportBtn.addEventListener('click', () => {
+  exportSubBtns.classList.toggle('visible');
+});
+
+document.getElementById('export-anki-btn').addEventListener('click', () => {
+  browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
+    exportAnki(savedWords);
+    exportSubBtns.classList.remove('visible');
+  });
+});
+
+document.getElementById('export-quizlet-btn').addEventListener('click', () => {
+  browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
+    exportQuizlet(savedWords);
+    exportSubBtns.classList.remove('visible');
+  });
+});
