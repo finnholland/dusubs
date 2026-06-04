@@ -360,6 +360,48 @@
     .export-sub-btn {
       flex: 1;
     }
+
+    #delete-all-btn,
+    #confirm-delete-btn {
+      width: 100%;
+      margin-top: 6px;
+      padding: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #252545;
+      color: #e06060;
+      border: 1px solid #3a3a6a;
+      border-radius: 5px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #delete-all-btn:hover,
+    #confirm-delete-btn:hover {
+      background: #2e2e60;
+    }
+
+    #delete-all-btn:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    #confirm-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 2px;
+      width: 100%;
+      background: #e06060;
+      transform-origin: left;
+      animation: confirm-shrink 3s linear forwards;
+    }
+
+    @keyframes confirm-shrink {
+      from { width: 100%; }
+      to { width: 0%; }
+    }
   </style>
 </head>
 
@@ -452,6 +494,8 @@
       <button class="export-sub-btn" id="export-anki-btn">Anki</button>
       <button class="export-sub-btn" id="export-quizlet-btn">Quizlet</button>
     </div>
+    <button id="delete-all-btn" disabled>Delete all</button>
+    <button id="confirm-delete-btn" style="display:none">Confirm<span id="confirm-bar"></span></button>
   </div>
 
   <script src="popup.js"></script>

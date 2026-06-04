@@ -161,6 +161,7 @@ function loadWords() {
       list.appendChild(row);
     });
     document.getElementById('export-btn').disabled = entries.length === 0;
+    document.getElementById('delete-all-btn').disabled = entries.length === 0;
   });
 }
 
@@ -218,4 +219,26 @@ document.getElementById('export-quizlet-btn').addEventListener('click', () => {
     exportQuizlet(savedWords);
     exportSubBtns.classList.remove('visible');
   });
+});
+
+const deleteAllBtn = document.getElementById('delete-all-btn');
+const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+
+deleteAllBtn.addEventListener('click', () => {
+  deleteAllBtn.style.display = 'none';
+  confirmDeleteBtn.style.display = '';
+  const bar = document.getElementById('confirm-bar');
+  bar.replaceWith(bar.cloneNode());
+  const t = setTimeout(() => {
+    confirmDeleteBtn.style.display = 'none';
+    deleteAllBtn.style.display = '';
+  }, 3000);
+  confirmDeleteBtn._dismissTimer = t;
+});
+
+confirmDeleteBtn.addEventListener('click', () => {
+  clearTimeout(confirmDeleteBtn._dismissTimer);
+  confirmDeleteBtn.style.display = 'none';
+  deleteAllBtn.style.display = '';
+  browser.storage.local.set({ savedWords: {} }).then(loadWords);
 });
