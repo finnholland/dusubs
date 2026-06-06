@@ -1,1 +1,4 @@
 cedict.json
+node_modules/
+popup.bundle.js
+popup.bundle.css
