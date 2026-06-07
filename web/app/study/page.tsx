@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useUser } from '../../lib/auth';
 import { getWords } from '../../lib/words';
 import FlashCard from '../../components/FlashCard';
@@ -9,7 +8,6 @@ import { SavedWord } from '../../types';
 
 export default function StudyPage() {
   const { user, loading } = useUser();
-  const router = useRouter();
 
   const [deck, setDeck] = useState<SavedWord[]>([]);
   const [index, setIndex] = useState(0);
@@ -17,13 +15,7 @@ export default function StudyPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.replace('/');
-  }, [user, loading, router]);
-
-  useEffect(() => {
-    if (!user) return;
-    getWords(user.uid).then(({ words }) => {
-      // Shuffle
+    getWords(user?.uid ?? null).then(({ words }) => {
       const shuffled = [...words].sort(() => Math.random() - 0.5);
       setDeck(shuffled);
     });
@@ -38,7 +30,7 @@ export default function StudyPage() {
     }
   };
 
-  if (loading || !user) return null;
+  if (loading) return null;
 
   if (deck.length === 0) {
     return (

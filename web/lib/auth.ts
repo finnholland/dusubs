@@ -7,13 +7,8 @@ type User = {
   email: string,
   delete: () => void
 }
-// Mock auth — always signed in as dev user until Firebase is configured.
-const DEV_USER = {
-  uid: null,
-  email: 'dev@local',
-  delete: async () => {},
-} as const;
 
+// Stub auth — user is always undefined until Firebase is wired up.
 export async function signIn() {}
 export async function signOut() {}
 
