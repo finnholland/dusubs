@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [syncToken, setSyncToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (user) getSyncToken(user.uid).then(setSyncToken);
@@ -23,21 +24,21 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const deleteAllWords = async () => {
-    const confirmed = window.confirm(
-      'Delete all saved words? This cannot be undone.'
-    );
+  const deleteAllWords = () => {
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteAllWords = async () => {
+    setShowDeleteModal(false);
     if (!user) {
-      deleteAllWordsFromExtension()
-      return
-    };
-    if (!confirmed) return;
+      deleteAllWordsFromExtension();
+      return;
+    }
     setDeleting(true);
     const db = getDb();
     const snap = await getDocs(collection(db, 'users', user.uid, 'words'));
     await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, 'users', user.uid, 'words', d.id))));
     setDeleting(false);
-    alert('All words deleted.');
   };
 
   const deleteAccount = async () => {
@@ -100,7 +101,7 @@ export default function SettingsPage() {
             disabled={deleting}
             className="border border-red-400/40 text-red-400 px-5 py-2 rounded-full text-sm hover:bg-red-400/10 transition-colors disabled:opacity-40"
           >
-            Delete all words
+            {deleting ? 'Deleting…' : 'Delete all words'}
           </button>
           <button
             onClick={deleteAccount}
@@ -110,6 +111,30 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
+
+      {/* Delete all words confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 flex flex-col gap-4">
+            <h2 className="text-white font-semibold text-lg">Delete all words?</h2>
+            <p className="text-white/50 text-sm">This will permanently remove all your saved words. This cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="border border-white/20 text-white/70 px-4 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteAllWords}
+                className="bg-red-500/20 border border-red-400/40 text-red-400 px-4 py-2 rounded-full text-sm hover:bg-red-400/30 transition-colors"
+              >
+                Delete all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
