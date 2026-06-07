@@ -30,4 +30,8 @@ window.addEventListener('message', async (e) => {
     delete savedWords[zh];
     await browser.storage.local.set({ savedWords });
   }
+
+  if (e.data.type === 'DUSUBS_DELETE_ALL_WORDS') {
+    await browser.storage.local.clear();
+  }
 });

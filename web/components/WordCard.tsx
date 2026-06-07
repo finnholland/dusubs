@@ -7,6 +7,17 @@ interface Props {
   onDelete: (id: string, zh?: string) => void;
 }
 
+function TrashIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4h6v2" />
+    </svg>
+  );
+}
+
 export default function WordCard({ word, onDelete }: Props) {
   const timestampUrl = word.url.includes('t=')
     ? word.url
@@ -28,7 +39,7 @@ export default function WordCard({ word, onDelete }: Props) {
           aria-label="Delete word"
           className="text-white/30 hover:text-red-400 transition-colors text-xs shrink-0"
         >
-          ✕
+          <TrashIcon />
         </button>
       </div>
 

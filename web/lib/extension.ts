@@ -53,3 +53,7 @@ export function saveWordToExtension(word: Omit<SavedWord, 'id'>): void {
 export function deleteWordFromExtension(zh: string): void {
   window.postMessage({ type: 'DUSUBS_DELETE_WORD', zh }, '*');
 }
+
+export function deleteAllWordsFromExtension(): void {
+  window.postMessage({ type: 'DUSUBS_DELETE_ALL_WORDS' }, '*');
+}

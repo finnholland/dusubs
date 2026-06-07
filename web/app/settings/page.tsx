@@ -1,21 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { deleteDoc, doc, collection, getDocs } from 'firebase/firestore';
 import { useUser, signOut, getSyncToken } from '../../lib/auth';
 import { getDb } from '../../lib/firebase';
+import { deleteAllWordsFromExtension } from '@/lib/extension';
 
 export default function SettingsPage() {
   const { user, loading } = useUser();
-  const router = useRouter();
   const [syncToken, setSyncToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    if (!loading && !user) router.replace('/');
-  }, [user, loading, router]);
 
   useEffect(() => {
     if (user) getSyncToken(user.uid).then(setSyncToken);
@@ -29,10 +24,13 @@ export default function SettingsPage() {
   };
 
   const deleteAllWords = async () => {
-    if (!user) return;
     const confirmed = window.confirm(
       'Delete all saved words? This cannot be undone.'
     );
+    if (!user) {
+      deleteAllWordsFromExtension()
+      return
+    };
     if (!confirmed) return;
     setDeleting(true);
     const db = getDb();
@@ -55,7 +53,7 @@ export default function SettingsPage() {
     router.replace('/');
   };
 
-  if (loading || !user) return null;
+  if (loading) return null;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 flex flex-col gap-10">
@@ -81,17 +79,18 @@ export default function SettingsPage() {
       </section>
 
       {/* Account */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-white/80 font-medium">Account</h2>
-        <p className="text-white/50 text-sm">Signed in as {user.email}</p>
-        <button
-          onClick={() => signOut().then(() => router.replace('/'))}
-          className="self-start border border-white/20 text-white/70 px-5 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors"
-        >
-          Sign out
-        </button>
-      </section>
-
+      {user &&
+        <section className="flex flex-col gap-3">
+          <h2 className="text-white/80 font-medium">Account</h2>
+          <p className="text-white/50 text-sm">Signed in as {user.email}</p>
+          <button
+            onClick={() => signOut().then(() => router.replace('/'))}
+            className="self-start border border-white/20 text-white/70 px-5 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors"
+          >
+            Sign out
+          </button>
+        </section>
+      }
       {/* Danger zone */}
       <section className="flex flex-col gap-3 border border-red-400/20 rounded-xl p-6">
         <h2 className="text-red-400 font-medium">Danger Zone</h2>

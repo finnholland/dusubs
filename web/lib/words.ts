@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebase';
 import { SavedWord } from '../types';
-import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension } from './extension';
+import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension, deleteAllWordsFromExtension } from './extension';
 
 const PAGE_SIZE = 50;
 

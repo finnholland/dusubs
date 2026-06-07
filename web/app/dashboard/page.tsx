@@ -8,6 +8,7 @@ import WordCard from '../../components/WordCard';
 import LanguageFilter from '../../components/LanguageFilter';
 import { SavedWord } from '../../types';
 
+
 export default function DashboardPage() {
   const { user, loading } = useUser();
 
