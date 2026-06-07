@@ -2,9 +2,14 @@
 
 import { useState } from 'react';
 
+type User = {
+  uid: string,
+  email: string,
+  delete: () => void
+}
 // Mock auth — always signed in as dev user until Firebase is configured.
 const DEV_USER = {
-  uid: 'dev-user',
+  uid: null,
   email: 'dev@local',
   delete: async () => {},
 } as const;
@@ -17,6 +22,6 @@ export async function getSyncToken(_uid: string): Promise<string> {
 }
 
 export function useUser() {
-  const [user] = useState(DEV_USER);
+  const [user] = useState<User | undefined>();
   return { user, loading: false };
 }

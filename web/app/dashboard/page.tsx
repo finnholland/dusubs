@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { DocumentSnapshot } from 'firebase/firestore';
 import { useUser } from '../../lib/auth';
 import { getWords, deleteWord, exportWords } from '../../lib/words';
@@ -11,48 +10,42 @@ import { SavedWord } from '../../types';
 
 export default function DashboardPage() {
   const { user, loading } = useUser();
-  const router = useRouter();
 
   const [words, setWords] = useState<SavedWord[]>([]);
   const [language, setLanguage] = useState<SavedWord['language'] | 'all'>('all');
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [fetching, setFetching] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-
-  useEffect(() => {
-    if (!loading && !user) router.replace('/');
-  }, [user, loading, router]);
+  const [source, setSource] = useState<'firebase' | 'extension' | 'none'>('none');
 
   const load = useCallback(
     async (reset = false) => {
-      if (!user) return;
       setFetching(true);
       const lang = language === 'all' ? undefined : language;
-      const result = await getWords(user.uid, {
+      const result = await getWords(user?.uid ?? null, {
         language: lang,
         after: reset ? undefined : lastDoc ?? undefined,
       });
       setWords((prev) => (reset ? result.words : [...prev, ...result.words]));
       setLastDoc(result.lastDoc);
       setHasMore(result.words.length === 50);
+      setSource(result.source);
       setFetching(false);
     },
     [user, language, lastDoc]
   );
 
   useEffect(() => {
-    if (user) {
-      setWords([]);
-      setLastDoc(null);
-      setHasMore(true);
-      load(true);
-    }
+    if (loading) return;
+    setWords([]);
+    setLastDoc(null);
+    setHasMore(true);
+    load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, language]);
+  }, [user, language, loading]);
 
-  const handleDelete = async (id: string) => {
-    if (!user) return;
-    await deleteWord(user.uid, id);
+  const handleDelete = async (id: string, zh?: string) => {
+    await deleteWord(user?.uid ?? null, id, zh);
     setWords((prev) => prev.filter((w) => w.id !== id));
   };
 
@@ -91,9 +84,19 @@ export default function DashboardPage() {
 
       <LanguageFilter value={language} onChange={setLanguage} />
 
+      {source === 'extension' && (
+        <p className="text-white/50 text-sm text-center border border-white/10 rounded-xl py-3 px-4">
+          Showing local words from the extension.{' '}
+          <a href="/login" className="text-yellow-400 hover:underline">Sign in</a>
+          {' '}to sync across devices.
+        </p>
+      )}
+
       {words.length === 0 && !fetching && (
         <p className="text-white/40 text-sm py-12 text-center">
-          No words saved yet. Install the extension and start watching!
+          {source === 'none'
+            ? 'Install the extension and start watching to save words.'
+            : 'No words saved yet. Start watching to save words!'}
         </p>
       )}
 

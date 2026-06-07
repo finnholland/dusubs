@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebase';
 import { SavedWord } from '../types';
+import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension } from './extension';
 
 const PAGE_SIZE = 50;
 
@@ -22,9 +23,18 @@ interface GetWordsOptions {
 }
 
 export async function getWords(
-  uid: string,
+  uid: string | null,
   { language, after }: GetWordsOptions = {}
-): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null }> {
+): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'none' }> {
+  if (!uid) {
+    const words = await getWordsFromExtension();
+    if (words) {
+      const filtered = language ? words.filter((w) => w.language === language) : words;
+      return { words: filtered, lastDoc: null, source: 'extension' };
+    }
+    return { words: [], lastDoc: null, source: 'none' };
+  }
+
   const ref = collection(getDb(), 'users', uid, 'words');
   const constraints = [
     ...(language ? [where('language', '==', language)] : []),
@@ -36,19 +46,27 @@ export async function getWords(
   const snap = await getDocs(q);
   const words = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SavedWord));
   const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
-  return { words, lastDoc };
+  return { words, lastDoc, source: 'firebase' };
 }
 
 export async function saveWord(
-  uid: string,
+  uid: string | null,
   word: Omit<SavedWord, 'id'>
 ): Promise<string> {
+  if (!uid) {
+    saveWordToExtension(word);
+    return word.zh ?? word.en;
+  }
   const ref = collection(getDb(), 'users', uid, 'words');
   const docRef = await addDoc(ref, word);
   return docRef.id;
 }
 
-export async function deleteWord(uid: string, wordId: string): Promise<void> {
+export async function deleteWord(uid: string | null, wordId: string, zh?: string): Promise<void> {
+  if (!uid) {
+    if (zh) deleteWordFromExtension(zh);
+    return;
+  }
   await deleteDoc(doc(getDb(), 'users', uid, 'words', wordId));
 }
 

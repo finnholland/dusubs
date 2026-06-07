@@ -7,6 +7,8 @@
     "activeTab",
     "storage",
     "webRequest",
+    "http://localhost:3000/*",
+    "https://www.dusubs.com/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
     "*://*.bilivideo.com/*"
@@ -19,7 +21,6 @@
   },
   "content_scripts": [
     {
-      "world": "MAIN",
       "matches": [
         "https://www.youtube.com/*",
         "https://m.youtube.com/*"
@@ -29,7 +30,6 @@
       ]
     },
     {
-      "world": "ISOLATED",
       "matches": [
         "https://www.youtube.com/*",
         "https://m.youtube.com/*",
@@ -38,6 +38,15 @@
       "js": [
         "pinyin-pro.js",
         "content.js"
+      ]
+    },
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "https://www.dusubs.com/*"
+      ],
+      "js": [
+        "web-bridge.js"
       ]
     }
   ],
@@ -52,8 +61,6 @@
     }
   },
   "web_accessible_resources": [
-    "fonts/Hanzi-Pinyin-Font.top.woff2",
-    "fonts/Hanzi-Pinyin-Font.top.ttf",
     "cedict.json"
   ]
 }

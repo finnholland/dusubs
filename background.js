@@ -57,6 +57,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+
 // Passive intercept — still useful if CC is already on
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {

@@ -4,7 +4,7 @@ import { SavedWord } from '../types';
 
 interface Props {
   word: SavedWord;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, zh?: string) => void;
 }
 
 export default function WordCard({ word, onDelete }: Props) {
@@ -24,7 +24,7 @@ export default function WordCard({ word, onDelete }: Props) {
           )}
         </div>
         <button
-          onClick={() => onDelete(word.id)}
+          onClick={() => onDelete(word.id, word.zh)}
           aria-label="Delete word"
           className="text-white/30 hover:text-red-400 transition-colors text-xs shrink-0"
         >
