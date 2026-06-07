@@ -79,11 +79,13 @@ export default function StudyPage() {
     const progress = progressRef.current;
 
     if (known) {
-      if (!freestyleRef.current) {
+      if (!freestyleRef.current && !requeuedRef.current.has(word.id)) {
         progress[word.id] = promote(progress[word.id], today);
         saveProgress(progress);
       }
-      setResults((r) => ({ ...r, known: r.known + 1 }));
+      if (!requeuedRef.current.has(word.id)) {
+        setResults((r) => ({ ...r, known: r.known + 1 }));
+      }
       if (index + 1 >= queue.length) {
         setStatus('done');
       } else {
