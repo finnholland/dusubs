@@ -6,7 +6,7 @@ import Header from '../components/Header';
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 
 export const metadata: Metadata = {
-  title: 'DuSub — Dual-Subtitle Language Learning',
+  title: 'DuSubs',
   description: 'Save and review vocabulary from YouTube with dual subtitles.',
 };
 

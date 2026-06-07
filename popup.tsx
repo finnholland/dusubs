@@ -280,7 +280,7 @@ function App() {
 
         <hr class="divider" />
         <div class="homepage">
-          <a href="https://github.com/finnholland/dusub">Homepage</a>
+          <a href="https://github.com/finnholland/dusubs">Homepage</a>
         </div>
       </div>
 

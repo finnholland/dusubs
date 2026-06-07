@@ -407,7 +407,11 @@
     const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
     const result = lookupWord(lastZh, idx);
     if (!result) return;
-    showTooltip(result, ruby);
+    const wordLen = [...result.word].length;
+    const rubyEls = [...zhBox.querySelectorAll('ruby[data-idx]')]
+      .filter(r => { const ri = parseInt(/** @type {HTMLElement} */(r).dataset.idx, 10); return ri >= idx && ri < idx + wordLen; });
+    const ctxPinyin = rubyEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
+    showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, ruby);
   });
 
   zhBox.addEventListener('mouseleave', startFade);
@@ -503,6 +507,7 @@
     const chars = [...text];
     let pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
     if (pinyinArr.length !== chars.length) return escapeHtml(text);
+    const rawPinyinArr = pinyinArr.slice();
     let correctedSet = /** @type {Set<number>} */ (new Set());
     if (cfg.toneSandhi && hpfDict) {
       ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
@@ -517,7 +522,7 @@
         const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
         correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
         const rt = cfg.showPinyin ? `<rt style="color:${rtColor}">${py}</rt>` : '';
-        return `<ruby data-idx="${i}">${escaped}${rt}</ruby>`;
+        return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}${rt}</ruby>`;
       }
       return escaped;
     }).join('');

@@ -10,7 +10,7 @@ export default function LandingPage() {
     <div className="max-w-4xl mx-auto px-4 py-20 flex flex-col items-center text-center gap-12">
       {/* Hero */}
       <div className="flex flex-col items-center gap-6">
-        <div className="text-yellow-400 text-6xl font-bold tracking-tight">DuSub</div>
+        <div className="text-yellow-400 text-6xl font-bold tracking-tight">DuSubs</div>
         <h1 className="text-3xl sm:text-4xl font-semibold text-white leading-tight max-w-2xl">
           Learn languages by watching YouTube with dual subtitles
         </h1>
@@ -23,7 +23,7 @@ export default function LandingPage() {
       {/* CTAs */}
       <div className="flex flex-col sm:flex-row gap-4">
         <a
-          href="https://addons.mozilla.org/firefox/addon/dusub/"
+          href="https://addons.mozilla.org/firefox/addon/dusubs/"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-yellow-400 text-[#1a1a2e] font-semibold px-8 py-3 rounded-full hover:bg-yellow-300 transition-colors"

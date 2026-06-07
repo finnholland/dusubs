@@ -55,7 +55,7 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {word.py && (
               <span className="text-white/50 text-base">{word.py}</span>
             )}
-            <span className="text-white text-xl">{word.en}</span>
+            <span className="text-white text-xl">{word.en.split(';').slice(0, 4).join(';')}</span>
             {word.sentEn && (
               <p className="text-white/40 text-sm italic mt-2">{word.sentEn}</p>
             )}
