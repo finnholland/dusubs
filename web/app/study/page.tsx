@@ -24,6 +24,8 @@ export default function StudyPage() {
   const { user, loading } = useUser();
   const allWordsRef = useRef<SavedWord[]>([]);
   const progressRef = useRef<LeitnerProgress>({});
+  const freestyleRef = useRef(false);
+  const requeuedRef = useRef<Set<string>>(new Set());
 
   const [status, setStatus] = useState<Status>('loading');
   const [nextDue, setNextDue] = useState<string | null>(null);
@@ -32,6 +34,8 @@ export default function StudyPage() {
   const [results, setResults] = useState({ known: 0, unknown: 0 });
 
   const startSession = () => {
+    freestyleRef.current = false;
+    requeuedRef.current = new Set();
     const today = todayStr();
     const progress = loadProgress();
     progressRef.current = progress;
@@ -46,6 +50,16 @@ export default function StudyPage() {
       setNextDue(null);
       setStatus('studying');
     }
+  };
+
+  const startFreestyle = () => {
+    freestyleRef.current = true;
+    requeuedRef.current = new Set();
+    const shuffled = [...allWordsRef.current].sort(() => Math.random() - 0.5);
+    setQueue(shuffled);
+    setIndex(0);
+    setResults({ known: 0, unknown: 0 });
+    setStatus('studying');
   };
 
   useEffect(() => {
@@ -65,8 +79,10 @@ export default function StudyPage() {
     const progress = progressRef.current;
 
     if (known) {
-      progress[word.id] = promote(progress[word.id], today);
-      saveProgress(progress);
+      if (!freestyleRef.current) {
+        progress[word.id] = promote(progress[word.id], today);
+        saveProgress(progress);
+      }
       setResults((r) => ({ ...r, known: r.known + 1 }));
       if (index + 1 >= queue.length) {
         setStatus('done');
@@ -74,9 +90,14 @@ export default function StudyPage() {
         setIndex((i) => i + 1);
       }
     } else {
-      progress[word.id] = demote(today);
-      saveProgress(progress);
-      setResults((r) => ({ ...r, unknown: r.unknown + 1 }));
+      if (!freestyleRef.current) {
+        progress[word.id] = demote(today);
+        saveProgress(progress);
+      }
+      if (!requeuedRef.current.has(word.id)) {
+        requeuedRef.current.add(word.id);
+        setResults((r) => ({ ...r, unknown: r.unknown + 1 }));
+      }
       setQueue((q) => [...q, word]);
       setIndex((i) => i + 1);
     }
@@ -94,9 +115,15 @@ export default function StudyPage() {
 
   if (status === 'caught-up') {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-4 text-center">
+      <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
         <h2 className="text-2xl font-semibold">All caught up</h2>
         {nextDue && <p className="text-white/50">Next review {formatDate(nextDue)}</p>}
+        <button
+          onClick={startFreestyle}
+          className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium"
+        >
+          Freestyle — practice all words
+        </button>
       </div>
     );
   }
@@ -128,13 +155,14 @@ export default function StudyPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-12 flex flex-col gap-8">
       <div className="flex items-center justify-between text-sm text-white/40">
-        <span>Card {index + 1} of {queue.length}</span>
+        <span>Card {index + 1} of {queue.length}{freestyleRef.current ? ' · freestyle' : ''}</span>
         <span>{results.known} known · {results.unknown} again</span>
       </div>
 
       <FlashCard
-        key={queue[index]?.id}
+        key={index}
         word={queue[index]}
+        freestyle={freestyleRef.current}
         onKnown={() => advance(true)}
         onUnknown={() => advance(false)}
       />
