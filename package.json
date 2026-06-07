@@ -2,6 +2,7 @@
   "name": "dusub",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/make-dict.js",
     "build": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact",
     "watch": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact --watch"
   },

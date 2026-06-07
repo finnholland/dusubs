@@ -37,6 +37,7 @@ export function getWordsFromExtension(): Promise<SavedWord[] | null> {
       if (e.data?.type !== 'DUSUBS_WORDS') return;
       clearTimeout(timer);
       window.removeEventListener('message', handler);
+      console.log(e.data)
       resolve((e.data.words as ExtWord[]).map(toSavedWord));
     }
 

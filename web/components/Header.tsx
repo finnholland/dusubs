@@ -10,23 +10,22 @@ export default function Header() {
     <header className="border-b border-white/10 bg-navy-900/80 backdrop-blur sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="text-yellow-400 font-bold text-lg tracking-tight">
-          DuSub
+          DuSubs
         </Link>
 
         <nav className="flex items-center gap-6 text-sm">
-          {user && (
-            <>
-              <Link href="/dashboard" className="text-white/70 hover:text-white transition-colors">
-                Words
-              </Link>
-              <Link href="/study" className="text-white/70 hover:text-white transition-colors">
-                Study
-              </Link>
-              <Link href="/settings" className="text-white/70 hover:text-white transition-colors">
-                Settings
-              </Link>
-            </>
-          )}
+
+          <>
+            <Link href="/dashboard" className="text-white/70 hover:text-white transition-colors">
+              Words
+            </Link>
+            <Link href="/study" className="text-white/70 hover:text-white transition-colors">
+              Study
+            </Link>
+            <Link href="/settings" className="text-white/70 hover:text-white transition-colors">
+              Settings
+            </Link>
+          </>
 
           {!loading && (
             user ? (

@@ -55,7 +55,7 @@ export default function DashboardPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dusub-words.${format === 'anki' ? 'txt' : 'txt'}`;
+    a.download = `dusubs-words.${format === 'anki' ? 'txt' : 'txt'}`;
     a.click();
     URL.revokeObjectURL(url);
   };

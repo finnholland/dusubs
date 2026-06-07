@@ -7,7 +7,6 @@
     "activeTab",
     "storage",
     "webRequest",
-    "http://localhost:3000/*",
     "https://www.dusubs.com/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
@@ -21,6 +20,7 @@
   },
   "content_scripts": [
     {
+      "world": "MAIN",
       "matches": [
         "https://www.youtube.com/*",
         "https://m.youtube.com/*"
@@ -30,6 +30,7 @@
       ]
     },
     {
+      "world": "ISOLATED",
       "matches": [
         "https://www.youtube.com/*",
         "https://m.youtube.com/*",
@@ -41,8 +42,9 @@
       ]
     },
     {
+      "world": "ISOLATED",
       "matches": [
-        "http://localhost:3000/*",
+        "http://localhost/*",
         "https://www.dusubs.com/*"
       ],
       "js": [
