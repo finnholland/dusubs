@@ -22,11 +22,6 @@ interface GetWordsOptions {
   after?: DocumentSnapshot;
 }
 
-export function trimDefinition(en: string) {
-  const shortDef = en.split(';').slice(0, 4).join(';')
-  return shortDef.replace(/(\(.*?\) )/g, '')
-}
-
 export async function getWords(
   uid: string | null,
   { language, after }: GetWordsOptions = {}

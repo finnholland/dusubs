@@ -353,17 +353,20 @@
     fadeTimer = setTimeout(hideTooltip, 250);
   }
 
+  function trimDefinition(en) {
+    const shortDef = en.split(';').slice(0, 4).join(';')
+    return shortDef.replace(/(\(.*?\) )/g, '').replace(/;{2,}/g, ';').replace(/;\s*$/, '').trim()
+  }
+
   /** @param {{ word: string, pinyin: string, defs: string }} result @param {Element} [anchor] */
   function showTooltip(result, anchor) {
     clearTimeout(fadeTimer);
     fadeTimer = undefined;
     const alreadySaved = savedZh.has(result.word);
-    let shortDef = result.defs.split(';').slice(0, 4).join(';')
-    shortDef = shortDef.replace(/(\(.*?\) )/g, '')
     tooltip.innerHTML =
       `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
       `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
-      `<div class="hpf-tip-defs">${escapeHtml(shortDef)}</div>` +
+      `<div class="hpf-tip-defs">${escapeHtml(trimDefinition(result.defs))}</div>` +
       `<button class="hpf-tip-save${alreadySaved ? ' saved' : ''}">${alreadySaved ? 'Saved ✓' : 'Save word'}</button>`;
     const saveBtn = tooltip.querySelector('.hpf-tip-save');
     if (saveBtn) saveBtn.addEventListener('click', () =>
@@ -379,7 +382,7 @@
     const sep = location.href.includes('?') ? '&' : '?';
     const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
     const url = baseUrl + sep + 't=' + Math.floor(t);
-    const entry = { zh: result.word, py: result.pinyin, en: result.defs, sentZh: lastZh, sentEn: lastEn, url };
+    const entry = { zh: result.word, py: result.pinyin, en: trimDefinition(result.defs), sentZh: lastZh, sentEn: lastEn, url };
     browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
       savedWords[entry.zh] = entry;
       return browser.storage.local.set({ savedWords });

@@ -1,7 +1,6 @@
 'use client';
 
 import { SavedWord } from '../types';
-import { trimDefinition } from '@/lib/words';
 interface Props {
   word: SavedWord;
   onDelete: (id: string, zh?: string) => void;
@@ -43,7 +42,7 @@ export default function WordCard({ word, onDelete }: Props) {
         </button>
       </div>
 
-      <p className="text-white/80 text-sm">{trimDefinition(word.en)}</p>
+      <p className="text-white/80 text-sm">{word.en}</p>
 
       {word.sentZh && (
         <p className="text-white/40 text-xs italic border-l-2 border-yellow-400/30 pl-2">{word.sentZh}</p>

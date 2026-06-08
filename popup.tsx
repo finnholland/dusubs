@@ -168,15 +168,9 @@ function App() {
     browser.storage.local.set({ savedWords: next });
   }
 
-  function trimDefinition(en: string, count = 4) {
-    const shortDef = en.split(';').slice(0, count).join(';')
-    return shortDef.replace(/(\(.*?\) )/g, '')
-  }
-
   function exportAnki() {
     const lines = Object.values(words).map(w => {
-      const en = trimDefinition(w.en);
-      let back = `${escHtml(w.py)}<br>${escHtml(en)}`;
+      let back = `${escHtml(w.py)}<br>${escHtml(w.en)}`;
       if (w.sentEn || w.sentZh) {
         back += `<br><i>${escHtml([w.sentZh, w.sentEn].filter(Boolean).join(' · '))}</i>`;
       }
@@ -188,7 +182,7 @@ function App() {
 
   function exportQuizlet() {
     const lines = Object.values(words).map(w =>
-      `${w.zh}\t${w.py} · ${trimDefinition(w.en, 2)}`
+      `${w.zh}\t${w.py} · ${w.en}`
     );
     downloadText(lines.join('\n'), 'saved-words-quizlet.txt');
     setExportOpen(false);
@@ -298,7 +292,7 @@ function App() {
                 <span class="word-zh">{w.zh}</span>
                 <span class="word-meta">
                   <div class="word-py">{w.py}</div>
-                  <div class="word-en">{trimDefinition(w.en)}</div>
+                  <div class="word-en">{w.en}</div>
                 </span>
                 {w.url && (
                   <a class="word-link" href={w.url} target="_blank" title="Open video at time">
