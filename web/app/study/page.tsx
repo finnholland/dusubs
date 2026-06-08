@@ -9,6 +9,31 @@ import {
   demote, filterDue, LeitnerProgress, loadProgress, nextDueDate, promote, saveProgress,
 } from '../../lib/leitner';
 
+const STUDY_LANGS: { value: SavedWord['language'] | 'all'; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'zh', label: '🇨🇳 中文' },
+  { value: 'ja', label: '🇯🇵 日本語' },
+];
+
+function LangSwitcher({ value, onChange }: { value: SavedWord['language'] | 'all'; onChange: (l: SavedWord['language'] | 'all') => void }) {
+  return (
+    <div className="flex gap-2 justify-center">
+      {STUDY_LANGS.map((l) => (
+        <button
+          key={l.value}
+          onClick={() => onChange(l.value)}
+          className={`px-3 py-1 rounded-full text-sm border transition-colors cursor-pointer ${value === l.value
+            ? 'bg-yellow-400 text-black border-yellow-400 font-medium'
+            : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white'
+          }`}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -26,12 +51,19 @@ export default function StudyPage() {
   const progressRef = useRef<LeitnerProgress>({});
   const freestyleRef = useRef(false);
   const requeuedRef = useRef<Set<string>>(new Set());
+  const studyLangRef = useRef<SavedWord['language'] | 'all'>('all');
 
   const [status, setStatus] = useState<Status>('loading');
+  const [studyLang, setStudyLang] = useState<SavedWord['language'] | 'all'>('all');
   const [nextDue, setNextDue] = useState<string | null>(null);
   const [queue, setQueue] = useState<SavedWord[]>([]);
   const [index, setIndex] = useState(0);
   const [results, setResults] = useState({ known: 0, unknown: 0 });
+
+  const wordsForLang = () => {
+    if (studyLangRef.current === 'all') return allWordsRef.current;
+    return allWordsRef.current.filter((w) => w.language === studyLangRef.current);
+  };
 
   const startSession = () => {
     freestyleRef.current = false;
@@ -39,7 +71,7 @@ export default function StudyPage() {
     const today = todayStr();
     const progress = loadProgress();
     progressRef.current = progress;
-    const due = [...filterDue(allWordsRef.current, progress, today)].sort(() => Math.random() - 0.5);
+    const due = [...filterDue(wordsForLang(), progress, today)].sort(() => Math.random() - 0.5);
     if (due.length === 0) {
       setNextDue(nextDueDate(progress));
       setStatus('caught-up');
@@ -55,11 +87,17 @@ export default function StudyPage() {
   const startFreestyle = () => {
     freestyleRef.current = true;
     requeuedRef.current = new Set();
-    const shuffled = [...allWordsRef.current].sort(() => Math.random() - 0.5);
+    const shuffled = [...wordsForLang()].sort(() => Math.random() - 0.5);
     setQueue(shuffled);
     setIndex(0);
     setResults({ known: 0, unknown: 0 });
     setStatus('studying');
+  };
+
+  const changeLang = (lang: SavedWord['language'] | 'all') => {
+    studyLangRef.current = lang;
+    setStudyLang(lang);
+    startSession();
   };
 
   useEffect(() => {
@@ -120,6 +158,7 @@ export default function StudyPage() {
       <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
         <h2 className="text-2xl font-semibold">All caught up</h2>
         {nextDue && <p className="text-white/50">Next review {formatDate(nextDue)}</p>}
+        <LangSwitcher value={studyLang} onChange={changeLang} />
         <button
           onClick={startFreestyle}
           className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
@@ -144,6 +183,7 @@ export default function StudyPage() {
             <span className="text-white/50 ml-1">again</span>
           </div>
         </div>
+        <LangSwitcher value={studyLang} onChange={changeLang} />
         <button
           onClick={startFreestyle}
           className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
@@ -160,6 +200,8 @@ export default function StudyPage() {
         <span>Card {index + 1} of {queue.length}{freestyleRef.current ? ' · freestyle' : ''}</span>
         <span>{results.known} known · {results.unknown} again</span>
       </div>
+
+      <LangSwitcher value={studyLang} onChange={changeLang} />
 
       <FlashCard
         key={index}

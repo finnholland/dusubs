@@ -17,17 +17,18 @@ window.addEventListener('message', async (e) => {
 
   if (e.data.type === 'DUSUBS_SAVE_WORD') {
     const word = e.data.word;
-    if (!word?.zh) return;
+    const wordKey = word?.zh ?? word?.ja ?? word?.key;
+    if (!wordKey) return;
     const { savedWords } = await browser.storage.local.get({ savedWords: {} });
-    savedWords[word.zh] = word;
+    savedWords[wordKey] = word;
     await browser.storage.local.set({ savedWords });
   }
 
   if (e.data.type === 'DUSUBS_DELETE_WORD') {
-    const { zh } = e.data;
-    if (!zh) return;
+    const key = e.data.key ?? e.data.zh;
+    if (!key) return;
     const { savedWords } = await browser.storage.local.get({ savedWords: {} });
-    delete savedWords[zh];
+    delete savedWords[key];
     await browser.storage.local.set({ savedWords });
   }
 

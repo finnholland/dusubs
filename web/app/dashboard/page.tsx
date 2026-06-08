@@ -45,8 +45,8 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, language, loading]);
 
-  const handleDelete = async (id: string, zh?: string) => {
-    await deleteWord(user?.uid ?? null, id, zh);
+  const handleDelete = async (id: string, key?: string) => {
+    await deleteWord(user?.uid ?? null, id, key);
     setWords((prev) => prev.filter((w) => w.id !== id));
   };
 
@@ -103,7 +103,7 @@ export default function DashboardPage() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {words.map((w) => (
-          <WordCard key={w.id} word={w} onDelete={handleDelete} />
+          <WordCard key={w.id} word={w} onDelete={handleDelete} showLanguage={language === 'all'} />
         ))}
       </div>
 

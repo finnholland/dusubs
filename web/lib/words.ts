@@ -55,16 +55,16 @@ export async function saveWord(
 ): Promise<string> {
   if (!uid) {
     saveWordToExtension(word);
-    return word.zh ?? word.en;
+    return word.zh ?? word.ja ?? word.en;
   }
   const ref = collection(getDb(), 'users', uid, 'words');
   const docRef = await addDoc(ref, word);
   return docRef.id;
 }
 
-export async function deleteWord(uid: string | null, wordId: string, zh?: string): Promise<void> {
+export async function deleteWord(uid: string | null, wordId: string, key?: string): Promise<void> {
   if (!uid) {
-    if (zh) deleteWordFromExtension(zh);
+    if (key) deleteWordFromExtension(key);
     return;
   }
   await deleteDoc(doc(getDb(), 'users', uid, 'words', wordId));
@@ -76,10 +76,10 @@ export function exportWords(
 ): string {
   if (format === 'anki') {
     return words
-      .map((w) => `${w.zh ?? w.en}\t${w.en}${w.py ? ` [${w.py}]` : ''}${w.sentEn ? `\n${w.sentEn}` : ''}`)
+      .map((w) => `${w.zh ?? w.ja ?? w.en}\t${w.en}${w.py ? ` [${w.py}]` : ''}${w.sentEn ? `\n${w.sentEn}` : ''}`)
       .join('\n');
   }
   return words
-    .map((w) => `${w.zh ?? w.en}, ${w.en}${w.py ? ` [${w.py}]` : ''}`)
+    .map((w) => `${w.zh ?? w.ja ?? w.en}, ${w.en}${w.py ? ` [${w.py}]` : ''}`)
     .join('\n');
 }

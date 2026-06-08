@@ -15,6 +15,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
   const [hintLevel, setHintLevel] = useState(0);
 
   const maxHints = freestyle ? 3 : 1;
+  const displayWord = word.zh ?? word.ja;
+  const displaySent = word.sentZh ?? word.sentJa;
 
   return (
     <div className="flex flex-col items-center gap-6">
@@ -33,11 +35,11 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
 
         {!flipped ? (
           <>
-            {word.zh && (
-              <span className="text-yellow-400 text-4xl font-semibold">{word.zh}</span>
+            {displayWord && (
+              <span className="text-yellow-400 text-4xl font-semibold">{displayWord}</span>
             )}
-            {hintLevel >= 1 && word.sentZh && (
-              <p className="text-white/40 text-sm italic mt-2">{word.sentZh}</p>
+            {hintLevel >= 1 && displaySent && (
+              <p className="text-white/40 text-sm italic mt-2">{displaySent}</p>
             )}
             {freestyle && hintLevel >= 2 && word.sentEn && (
               <p className="text-white/40 text-sm italic">{word.sentEn}</p>
@@ -49,8 +51,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
           </>
         ) : (
           <>
-            {word.zh && (
-              <span className="text-yellow-400/60 text-2xl">{word.zh}</span>
+            {displayWord && (
+              <span className="text-yellow-400/60 text-2xl">{displayWord}</span>
             )}
             {word.py && (
               <span className="text-white/50 text-base">{word.py}</span>

@@ -7,6 +7,63 @@
 const fs = require('fs');
 const path = require('path');
 
+
+const HIRAGANA_TO_ROMAJI = {
+  'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+  'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+  'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+  'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+  'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+  'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+  'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+  'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+  'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+  'わ': 'wa', 'を': 'wo', 'ん': 'n',
+  'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
+  'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
+  'だ': 'da', 'ぢ': 'di', 'づ': 'du', 'で': 'de', 'ど': 'do',
+  'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
+  'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
+  // compound kana — must be checked before single kana
+  'きゃ': 'kya', 'きゅ': 'kyu', 'きょ': 'kyo',
+  'しゃ': 'sha', 'しゅ': 'shu', 'しょ': 'sho',
+  'ちゃ': 'cha', 'ちゅ': 'chu', 'ちょ': 'cho',
+  'にゃ': 'nya', 'にゅ': 'nyu', 'にょ': 'nyo',
+  'ひゃ': 'hya', 'ひゅ': 'hyu', 'ひょ': 'hyo',
+  'みゃ': 'mya', 'みゅ': 'myu', 'みょ': 'myo',
+  'りゃ': 'rya', 'りゅ': 'ryu', 'りょ': 'ryo',
+  'ぎゃ': 'gya', 'ぎゅ': 'gyu', 'ぎょ': 'gyo',
+  'じゃ': 'ja', 'じゅ': 'ju', 'じょ': 'jo',
+  'びゃ': 'bya', 'びゅ': 'byu', 'びょ': 'byo',
+  'ぴゃ': 'pya', 'ぴゅ': 'pyu', 'ぴょ': 'pyo',
+  'っ': '', // double next consonant — handled separately
+  'ー': '-',
+};
+
+function toRomaji(hiragana) {
+  let result = '';
+  let i = 0;
+  while (i < hiragana.length) {
+    // try compound (2-char) first
+    const two = hiragana.slice(i, i + 2);
+    if (HIRAGANA_TO_ROMAJI[two]) {
+      result += HIRAGANA_TO_ROMAJI[two];
+      i += 2;
+    } else if (hiragana[i] === 'っ') {
+      // double the next consonant
+      const next = HIRAGANA_TO_ROMAJI[hiragana.slice(i + 1, i + 3)]
+        ?? HIRAGANA_TO_ROMAJI[hiragana[i + 1]]
+        ?? '';
+      result += next[0] ?? '';
+      i++;
+    } else {
+      result += HIRAGANA_TO_ROMAJI[hiragana[i]] ?? hiragana[i];
+      i++;
+    }
+  }
+  return result;
+}
+
 const inputPath = path.join(__dirname, 'jmdict-english.json');
 if (!fs.existsSync(inputPath)) {
   console.error('Missing scripts/jmdict-english.json');
@@ -28,12 +85,13 @@ for (const entry of jmdict.words) {
   const pos = entry.sense[0]?.partOfSpeech?.[0] ?? '';
 
   for (const k of entry.kanji) {
-    out[k.text] = { rd: entry.kana[0]?.text ?? '', en: defs, pos };
+    const rd = entry.kana[0]?.text ?? '';
+    out[k.text] = { rd, rm: toRomaji(rd), en: defs, pos };
   }
 
   for (const k of entry.kana) {
     if (!out[k.text]) {
-      out[k.text] = { rd: k.text, en: defs, pos };
+      out[k.text] = { rd: k.text, rm: toRomaji(k.text), en: defs, pos };
     }
   }
 }

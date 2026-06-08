@@ -2,21 +2,30 @@ import { SavedWord } from '../types';
 
 type ExtWord = {
   zh?: string;
+  ja?: string;
+  key?: string;      // legacy
+  language?: SavedWord['language'];
   py?: string;
   en: string;
   sentZh?: string;
+  sentJa?: string;
+  sentKey?: string;  // legacy
   sentEn?: string;
   url: string;
 };
 
 function toSavedWord(w: ExtWord): SavedWord {
+  const lang = w.language ?? 'zh';
+  const word = w.zh ?? w.ja ?? w.key;
   return {
-    id: w.zh ?? w.en,
-    language: 'zh',
-    zh: w.zh,
+    id: word ?? w.en,
+    language: lang,
+    zh: w.zh ?? (lang === 'zh' ? w.key : undefined),
+    ja: w.ja ?? (lang === 'ja' ? w.key : undefined),
     py: w.py,
     en: w.en,
-    sentZh: w.sentZh,
+    sentZh: w.sentZh ?? (lang === 'zh' ? w.sentKey : undefined),
+    sentJa: w.sentJa ?? (lang === 'ja' ? w.sentKey : undefined),
     sentEn: w.sentEn,
     url: w.url,
     ts: 0,
@@ -37,7 +46,6 @@ export function getWordsFromExtension(): Promise<SavedWord[] | null> {
       if (e.data?.type !== 'DUSUBS_WORDS') return;
       clearTimeout(timer);
       window.removeEventListener('message', handler);
-      console.log(e.data)
       resolve((e.data.words as ExtWord[]).map(toSavedWord));
     }
 
@@ -50,8 +58,8 @@ export function saveWordToExtension(word: Omit<SavedWord, 'id'>): void {
   window.postMessage({ type: 'DUSUBS_SAVE_WORD', word }, '*');
 }
 
-export function deleteWordFromExtension(zh: string): void {
-  window.postMessage({ type: 'DUSUBS_DELETE_WORD', zh }, '*');
+export function deleteWordFromExtension(key: string): void {
+  window.postMessage({ type: 'DUSUBS_DELETE_WORD', key }, '*');
 }
 
 export function deleteAllWordsFromExtension(): void {

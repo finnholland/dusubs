@@ -1,9 +1,19 @@
 'use client';
 
 import { SavedWord } from '../types';
+
+const FLAG: Record<string, string> = {
+  zh: '🇨🇳',
+  ja: '🇯🇵',
+  es: '🇪🇸',
+  fr: '🇫🇷',
+  en: '🇬🇧',
+};
+
 interface Props {
   word: SavedWord;
-  onDelete: (id: string, zh?: string) => void;
+  onDelete: (id: string, key?: string) => void;
+  showLanguage?: boolean;
 }
 
 function TrashIcon() {
@@ -17,24 +27,30 @@ function TrashIcon() {
   );
 }
 
-export default function WordCard({ word, onDelete }: Props) {
+export default function WordCard({ word, onDelete, showLanguage }: Props) {
+  const displayWord = word.zh ?? word.ja;
+  const displaySent = word.sentZh ?? word.sentJa;
+
   const timestampUrl = word.url.includes('t=')
     ? word.url
     : `${word.url}${word.url.includes('?') ? '&' : '?'}t=${word.ts}`;
 
   return (
     <div className="border border-white/10 rounded-xl p-4 flex flex-col gap-2 bg-white/5 hover:bg-white/8 transition-colors">
+      {showLanguage && (
+        <span className="text-sm leading-none" title={word.language}>{FLAG[word.language] ?? word.language.toUpperCase()}</span>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div>
-          {word.zh && (
-            <span className="text-yellow-400 text-xl font-semibold mr-2">{word.zh}</span>
+          {displayWord && (
+            <span className="text-yellow-400 text-xl font-semibold mr-2">{displayWord}</span>
           )}
           {word.py && (
             <span className="text-white/50 text-sm">{word.py}</span>
           )}
         </div>
         <button
-          onClick={() => onDelete(word.id, word.zh)}
+          onClick={() => onDelete(word.id, displayWord)}
           aria-label="Delete word"
           className="text-white/30 hover:text-red-400 transition-colors text-xs shrink-0 cursor-pointer"
         >
@@ -44,8 +60,8 @@ export default function WordCard({ word, onDelete }: Props) {
 
       <p className="text-white/80 text-sm">{word.en}</p>
 
-      {word.sentZh && (
-        <p className="text-white/40 text-xs italic border-l-2 border-yellow-400/30 pl-2">{word.sentZh}</p>
+      {displaySent && (
+        <p className="text-white/40 text-xs italic border-l-2 border-yellow-400/30 pl-2">{displaySent}</p>
       )}
       {word.sentEn && (
         <p className="text-white/30 text-xs italic">{word.sentEn}</p>

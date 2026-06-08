@@ -5,10 +5,10 @@ import { SavedWord } from '../types';
 const ACTIVE_LANGUAGES: { value: SavedWord['language'] | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'zh', label: '中文' },
+  { value: 'ja', label: '日本語' },
 ];
 
 const COMING_SOON_LANGUAGES: { value: SavedWord['language'] | 'all'; label: string }[] = [
-  { value: 'ja', label: '日本語' },
   { value: 'es', label: 'Español' },
   { value: 'fr', label: 'Français' },
   { value: 'en', label: 'English' },
@@ -27,11 +27,10 @@ export default function LanguageFilter({ value, onChange }: Props) {
           <button
             key={lang.value}
             onClick={() => onChange(lang.value)}
-            className={`px-3 py-1 rounded-full text-sm border transition-colors cursor-pointer ${
-              value === lang.value
+            className={`px-3 py-1 rounded-full text-sm border transition-colors cursor-pointer ${value === lang.value
                 ? 'bg-yellow-400 text-navy border-yellow-400 font-medium'
                 : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white'
-            }`}
+              }`}
           >
             {lang.label}
           </button>
