@@ -44,6 +44,10 @@ function toRomaji(hiragana) {
   let result = '';
   let i = 0;
   while (i < hiragana.length) {
+    const isLast = i === hiragana.length - 1;
+    // は/へ as word-final particles
+    if (isLast && hiragana[i] === 'は') { result += 'wa'; i++; continue; }
+    if (isLast && hiragana[i] === 'へ') { result += 'e'; i++; continue; }
     // try compound (2-char) first
     const two = hiragana.slice(i, i + 2);
     if (HIRAGANA_TO_ROMAJI[two]) {

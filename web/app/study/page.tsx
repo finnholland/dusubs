@@ -25,7 +25,7 @@ function LangSwitcher({ value, onChange }: { value: SavedWord['language'] | 'all
           className={`px-3 py-1 rounded-full text-sm border transition-colors cursor-pointer ${value === l.value
             ? 'bg-yellow-400 text-black border-yellow-400 font-medium'
             : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white'
-          }`}
+            }`}
         >
           {l.label}
         </button>
@@ -43,7 +43,7 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
-type Status = 'loading' | 'empty' | 'caught-up' | 'studying' | 'done';
+type Status = 'loading' | 'empty' | 'empty-lang' | 'caught-up' | 'studying' | 'done';
 
 export default function StudyPage() {
   const { user, loading } = useUser();
@@ -68,10 +68,12 @@ export default function StudyPage() {
   const startSession = () => {
     freestyleRef.current = false;
     requeuedRef.current = new Set();
+    const words = wordsForLang();
+    if (words.length === 0) { setStatus(studyLangRef.current === 'all' ? 'empty' : 'empty-lang'); return; }
     const today = todayStr();
     const progress = loadProgress();
     progressRef.current = progress;
-    const due = [...filterDue(wordsForLang(), progress, today)].sort(() => Math.random() - 0.5);
+    const due = [...filterDue(words, progress, today)].sort(() => Math.random() - 0.5);
     if (due.length === 0) {
       setNextDue(nextDueDate(progress));
       setStatus('caught-up');
@@ -88,6 +90,7 @@ export default function StudyPage() {
     freestyleRef.current = true;
     requeuedRef.current = new Set();
     const shuffled = [...wordsForLang()].sort(() => Math.random() - 0.5);
+    if (shuffled.length === 0) { setStatus(studyLangRef.current === 'all' ? 'empty' : 'empty-lang'); return; }
     setQueue(shuffled);
     setIndex(0);
     setResults({ known: 0, unknown: 0 });
@@ -97,7 +100,8 @@ export default function StudyPage() {
   const changeLang = (lang: SavedWord['language'] | 'all') => {
     studyLangRef.current = lang;
     setStudyLang(lang);
-    startSession();
+    if (freestyleRef.current) startFreestyle();
+    else startSession();
   };
 
   useEffect(() => {
@@ -153,18 +157,38 @@ export default function StudyPage() {
     );
   }
 
+  const langLabel = STUDY_LANGS.find((l) => l.value === studyLang)?.label ?? studyLang;
+  if (status === 'empty-lang') {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 flex flex-col gap-8">
+        <div className="flex items-center justify-between text-sm text-white/40 min-h-5" />
+        <LangSwitcher value={studyLang} onChange={changeLang} />
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative w-full max-w-lg min-h-48 border border-white/10 rounded-2xl p-8 bg-white/5 text-center flex flex-col items-center justify-center text-white/60">
+            No words saved in {langLabel}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (status === 'caught-up') {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
-        <h2 className="text-2xl font-semibold">All caught up</h2>
-        {nextDue && <p className="text-white/50">Next review {formatDate(nextDue)}</p>}
+      <div className="max-w-2xl mx-auto px-4 py-12 flex flex-col gap-8">
+        <div className="flex items-center justify-between text-sm text-white/40 min-h-5" />
         <LangSwitcher value={studyLang} onChange={changeLang} />
-        <button
-          onClick={startFreestyle}
-          className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
-        >
-          Freestyle — practice all words
-        </button>
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative w-full max-w-lg min-h-48 border border-white/10 rounded-2xl p-8 bg-white/5 text-center flex flex-col items-center justify-center gap-2 text-white/60">
+            All caught up
+            {nextDue && <span className="text-sm">Next review {formatDate(nextDue)}</span>}
+          </div>
+          <button
+            onClick={startFreestyle}
+            className="px-8 py-2 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
+          >
+            Freestyle practice
+          </button>
+        </div>
       </div>
     );
   }
@@ -188,7 +212,7 @@ export default function StudyPage() {
           onClick={startFreestyle}
           className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
         >
-          Freestyle — practice all words
+          Freestyle practice
         </button>
       </div>
     );
@@ -196,12 +220,20 @@ export default function StudyPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-12 flex flex-col gap-8">
-      <div className="flex items-center justify-between text-sm text-white/40">
+      <div className="flex items-center justify-between text-sm text-white/40 min-h-5">
+        {queue.length === 0 && <span>Card </span>}
         <span>Card {index + 1} of {queue.length}{freestyleRef.current ? ' · freestyle' : ''}</span>
         <span>{results.known} known · {results.unknown} again</span>
       </div>
 
-      <LangSwitcher value={studyLang} onChange={changeLang} />
+      <div className="flex justify-center">
+        <button
+          onClick={startSession}
+          className="px-3 py-1 rounded-full text-sm border border-white/20 text-white/60 hover:border-white/40 hover:text-white transition-colors cursor-pointer"
+        >
+          Exit freestyle
+        </button>
+      </div>
 
       <FlashCard
         key={index}

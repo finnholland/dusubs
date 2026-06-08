@@ -536,7 +536,10 @@
         if (!entry) return;
         const defs = entry.en.join('; ');
         const pos = entry.pos ? `[${entry.pos}] ` : '';
-        const reading = true ? `${entry.rd}  ${entry.rm}` : entry.rd;
+        const romaji = entry.rm || '';
+        const reading = hasKanji(base)
+          ? [entry.rd, romaji].filter(Boolean).join('  ')
+          : romaji || entry.rd;
         showTooltip({ word: base, pinyin: reading, defs: pos + defs }, wordSpan);
         return;
       }
