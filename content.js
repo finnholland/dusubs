@@ -3,7 +3,7 @@
 /**
  * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
  *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean,
- *             learnMode: 'none'|'en'|'zh', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
+ *             learnMode: 'none'|'en'|'zh'|'ja', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -85,6 +85,11 @@
     .hpf-tip-save:hover { background: rgba(255,255,255,0.2); }
     .hpf-tip-save.saved { color: #7ef07e; border-color: #7ef07e; }
     .hpf-box rt { color: #fff; }
+    .hpf-box .dusub-word {
+      pointer-events: auto;
+      cursor: default;
+      display: inline;
+    }
   `;
   document.head.appendChild(styleEl);
 
@@ -135,6 +140,7 @@
     LOG('cfg:', JSON.stringify(cfg));
     applyStyle();
     for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
+    if (cfg.learnMode === 'ja') { loadKuromoji(); loadJaDict(); }
   });
 
   browser.storage.onChanged.addListener((changes, area) => {
@@ -146,6 +152,10 @@
     if ('zhTrack' in changes || 'enTrack' in changes) {
       cues.zh = []; cues.en = [];
       trackChanged = true;
+    }
+    if ('learnMode' in changes) {
+      lastZh = ''; lastEn = '';
+      if (changes.learnMode.newValue === 'ja') { loadKuromoji(); loadJaDict(); }
     }
     applyStyle();
     if (trackChanged && lastTrackUrls) fetchSubtitles(lastTrackUrls);
@@ -195,16 +205,20 @@
     `;
 
     const zhTrackIsChinese = /^zh/i.test(cfg.zhTrack || '');
+    const zhTrackIsJapanese = /^ja/i.test(cfg.zhTrack || '');
     const enTrackIsChinese = /^zh/i.test(cfg.enTrack || '');
+    const enTrackIsJapanese = /^ja/i.test(cfg.enTrack || '');
 
     const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
-    // extra top padding when the zh box is showing pinyin ruby text above characters
+    const zhNeedsRubyPadding =
+      (zhTrackIsChinese && cfg.learnMode === 'zh' && cfg.pinyinEnabled) ||
+      (zhTrackIsJapanese && cfg.learnMode === 'ja' && cfg.pinyinEnabled);
     const zhWinBg = cfg.window
-      ? `background:rgba(0,0,0,0.5);padding:${zhTrackIsChinese && cfg.learnMode === 'zh' && cfg.pinyinEnabled ? '.25em' : '0'} 10px 0;border-radius:3px;`
+      ? `background:rgba(0,0,0,0.5);padding:${zhNeedsRubyPadding ? '.25em' : '0'} 10px 0;border-radius:3px;`
       : '';
 
-    zhBox.style.cssText = defaultBoxStyle + zhWinBg + `font-size: ${zhTrackIsChinese ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
-    enBox.style.cssText = defaultBoxStyle + winBg + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + (enTrackIsChinese ? zhKerning : '');
+    zhBox.style.cssText = defaultBoxStyle + zhWinBg + `font-size: ${(zhTrackIsChinese || zhTrackIsJapanese) ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
+    enBox.style.cssText = defaultBoxStyle + winBg + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + ((enTrackIsChinese || enTrackIsJapanese) ? zhKerning : '');
 
     root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
     if (!cfg.zhTrack && !cfg.enTrack) showSiteSubs();
@@ -245,6 +259,101 @@
       if (entry) return { word, pinyin: entry[0], defs: entry[1] };
     }
     return null;
+  }
+
+  // ── Japanese ───────────────────────────────────────────────────────────────
+  /** @type {any} */
+  let kuromoji = null;
+  let kuromojiLoading = false;
+
+  async function loadKuromoji() {
+    if (kuromoji || kuromojiLoading) return;
+    kuromojiLoading = true;
+    const lib = globalThis.kuromoji;
+    if (!lib?.builder) { kuromojiLoading = false; return; }
+
+    // pre-fetch all dict files as blob URLs so kuromoji's XHR can reach them
+    const files = ['base', 'cc', 'check', 'tid', 'tid_pos', 'tid_map',
+      'unk', 'unk_pos', 'unk_map', 'unk_char', 'unk_compat', 'unk_invoke'];
+    const blobs = {};
+    await Promise.all(files.map(async name => {
+      const res = await fetch(browser.runtime.getURL(`dict/${name}.dat.gz`));
+      blobs[`${name}.dat.gz`] = URL.createObjectURL(await res.blob());
+    }));
+
+    const origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method, url) {
+      const file = url.split('/').pop();
+      return origOpen.call(this, method, blobs[file] ?? url);
+    };
+
+    try {
+      kuromoji = await new Promise((resolve, reject) =>
+        lib.builder({ dicPath: browser.runtime.getURL('dict/') })
+          .build((err, tok) => err ? reject(err) : resolve(tok))
+      );
+      XMLHttpRequest.prototype.open = origOpen; // restore
+      Object.values(blobs).forEach(URL.revokeObjectURL);
+      LOG('kuromoji loaded ✓');
+      lastZh = ''; lastEn = '';
+    } catch (e) {
+      XMLHttpRequest.prototype.open = origOpen;
+      LOG('kuromoji load failed:', e);
+      kuromojiLoading = false;
+    }
+  }
+
+  function toHiragana(katakana) {
+    return (katakana || '').replace(/[ァ-ヶ]/g, ch =>
+      String.fromCharCode(ch.charCodeAt(0) - 0x60)
+    );
+  }
+
+  function hasKanji(text) {
+    return /[一-鿿㐀-䶿]/.test(text);
+  }
+
+  /** @type {Record<string, { rd: string, en: string[], pos: string }> | null} */
+  let jaDict = null;
+  let jaDictLoading = false;
+
+  async function loadJaDict() {
+    if (jaDict || jaDictLoading) return;
+    jaDictLoading = true;
+    try {
+      const resp = await fetch(browser.runtime.getURL('ja-dict.json'));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      jaDict = await resp.json();
+      LOG('jaDict loaded:', Object.keys(jaDict).length, 'entries');
+    } catch (e) {
+      LOG('jaDict load failed:', e);
+      jaDictLoading = false;
+    }
+  }
+
+  /** @param {{ baseForm: string, surface: string }} token */
+  function lookupJapanese(token) {
+    if (!jaDict) return null;
+    return jaDict[token.baseForm] ?? jaDict[token.surface] ?? null;
+  }
+
+  /** @param {string} text @returns {string} */
+  function renderJapanese(text) {
+    if (!kuromoji) { loadKuromoji(); return escapeHtml(text); }
+    const tokens = kuromoji.tokenize(text);
+    return tokens.map(token => {
+      const surface = token.surface_form;
+      const baseForm = (token.basic_form && token.basic_form !== '*') ? token.basic_form : surface;
+      const reading = token.reading;
+      const escapedSurface = escapeHtml(surface);
+      const escapedBase = escapeHtml(baseForm);
+      if (hasKanji(surface) && reading) {
+        const hi = escapeHtml(toHiragana(reading));
+        const rt = cfg.pinyinEnabled ? `<rt>${hi}</rt>` : '';
+        return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}${rt}</ruby></span>`;
+      }
+      return `<span class="dusub-word" data-base="${escapedBase}">${escapedSurface}</span>`;
+    }).join('');
   }
 
   // ── Tone sandhi helpers ────────────────────────────────────────────────────
@@ -413,6 +522,20 @@
     box.addEventListener('mouseover', (e) => {
       const track = trackFn();
       if (cfg.learnMode === 'none' || !track || !track.startsWith(cfg.learnMode)) return;
+
+      if (cfg.learnMode === 'ja') {
+        const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
+        if (!wordSpan) return;
+        if (!jaDict) { loadJaDict(); return; }
+        const base = /** @type {HTMLElement} */ (wordSpan).dataset.base;
+        const entry = jaDict[base];
+        if (!entry) return;
+        const defs = entry.en.join('; ');
+        const pos = entry.pos ? `[${entry.pos}] ` : '';
+        showTooltip({ word: base, pinyin: entry.rd, defs: pos + defs }, wordSpan);
+        return;
+      }
+
       if (!hpfDict) { loadDict(); return; }
       const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
       if (!ruby) return;
@@ -576,24 +699,31 @@
     if (cfg.zhTrack && !zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
     if (cfg.enTrack && !en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
-    const effectivePinyin = cfg.learnMode === 'zh' && cfg.pinyinEnabled;
+    const effectivePinyin = (cfg.learnMode === 'zh' || cfg.learnMode === 'ja') && cfg.pinyinEnabled;
     const showPinyinChanged = effectivePinyin !== lastShowPinyin;
     if (showPinyinChanged) lastShowPinyin = effectivePinyin;
     const effectiveSandhi = cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled;
     const toneSandhiChanged = effectiveSandhi !== lastSandhiEnabled;
     if (toneSandhiChanged) lastSandhiEnabled = effectiveSandhi;
 
+    if (cfg.learnMode === 'ja' && !kuromoji) loadKuromoji();
+    if (cfg.learnMode === 'ja' && !jaDict) loadJaDict();
+
     const zhIsZh = /^zh/i.test(cfg.zhTrack || '');
+    const zhIsJa = /^ja/i.test(cfg.zhTrack || '');
     const enIsZh = /^zh/i.test(cfg.enTrack || '');
+    const enIsJa = /^ja/i.test(cfg.enTrack || '');
 
     if (zh !== lastZh || showPinyinChanged || toneSandhiChanged) {
       lastZh = zh;
-      if (zhIsZh) zhBox.innerHTML = renderRuby(zh);
+      if (zhIsZh && cfg.learnMode === 'zh') zhBox.innerHTML = renderRuby(zh);
+      else if (zhIsJa && cfg.learnMode === 'ja') zhBox.innerHTML = renderJapanese(zh);
       else zhBox.textContent = zh;
     }
     if (en !== lastEn || showPinyinChanged || toneSandhiChanged) {
       lastEn = en;
-      if (enIsZh) enBox.innerHTML = renderRuby(en);
+      if (enIsZh && cfg.learnMode === 'zh') enBox.innerHTML = renderRuby(en);
+      else if (enIsJa && cfg.learnMode === 'ja') enBox.innerHTML = renderJapanese(en);
       else enBox.textContent = en;
     }
 

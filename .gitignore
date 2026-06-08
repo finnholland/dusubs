@@ -4,3 +4,6 @@ popup.bundle.js
 popup.bundle.css
 
 web/.next
+dict/
+ja-dict.json
+scripts/jmdict-english.json

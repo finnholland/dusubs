@@ -25,7 +25,7 @@ interface Settings {
   zhTrack: string; enTrack: string;
   zhColor: string; enColor: string;
   stroke: boolean; window: boolean; shadow: boolean;
-  learnMode: 'none' | 'en' | 'zh';
+  learnMode: 'none' | 'zh' | 'ja';
   pinyinEnabled: boolean; sandhiEnabled: boolean;
 }
 
@@ -33,7 +33,7 @@ const DEFAULTS: Settings = {
   fontScale: 100, subPosition: 8, zhTrack: '', enTrack: '',
   zhColor: '#ffffff', enColor: '#ffe97a',
   stroke: true, window: false, shadow: false,
-  learnMode: 'none', pinyinEnabled: true, sandhiEnabled: true,
+  learnMode: 'none' as 'none' | 'zh' | 'ja', pinyinEnabled: true, sandhiEnabled: true,
 };
 
 const COLORS_ZH = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
@@ -234,10 +234,15 @@ function App() {
   }
 
   function cycleLearnMode() {
-    const next: 'none' | 'en' | 'zh' = s.learnMode === 'none' ? 'en' : s.learnMode === 'en' ? 'zh' : 'none';
+    const next: 'none' | 'zh' | 'ja' =
+      s.learnMode === 'none' ? 'zh' :
+        s.learnMode === 'zh' ? 'ja' : 'none';
     set('learnMode', next);
   }
-  const learnLabel = s.learnMode === 'none' ? 'Off' : s.learnMode === 'en' ? '🇬🇧 English' : '🇨🇳 Chinese';
+  const learnLabel =
+    s.learnMode === 'none' ? 'Off' :
+      s.learnMode === 'zh' ? '🇨🇳 Chinese' :
+        '🇯🇵 Japanese';
   const { version } = browser.runtime.getManifest();
 
   const wordList = Object.values(words);
@@ -263,6 +268,14 @@ function App() {
             <div class="toggle-row">
               <label class="name" for="tog-sandhi">Sandhi colours</label>
               <Toggle id="tog-sandhi" checked={s.sandhiEnabled && s.pinyinEnabled} disabled={!s.pinyinEnabled} onChange={v => set('sandhiEnabled', v)} />
+            </div>
+          </div>
+        )}
+        {s.learnMode === 'ja' && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">Furigana</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
             </div>
           </div>
         )}
