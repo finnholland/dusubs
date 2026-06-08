@@ -359,7 +359,7 @@
     fadeTimer = undefined;
     const alreadySaved = savedZh.has(result.word);
     let shortDef = result.defs.split(';').slice(0, 4).join(';')
-    shortDef = shortDef.replace(/^\(.*?\) /, '')
+    shortDef = shortDef.replace(/(\(.*?\) )/g, '')
     tooltip.innerHTML =
       `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
       `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
