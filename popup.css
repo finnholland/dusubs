@@ -116,12 +116,54 @@ body {
   margin: 10px 0;
 }
 
-.homepage {
+.learn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.learn-label {
+  font-size: 12px;
+  color: #bbb;
+  font-weight: 600;
+}
+
+.learn-btn {
+  font-size: 12px;
+  background: #252545;
+  color: #eee;
+  border: 1px solid #3a3a6a;
+  border-radius: 5px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.learn-btn:hover {
+  background: #2e2e60;
+}
+
+.popup-footer {
   width: 100%;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
+  padding: 2px;
+}
+
+.popup-footer a {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11px;
+}
+
+.popup-version {
+  color: #555;
+  font-size: 10px;
+  margin-left: 2px;
 }
 
 .slider-row {

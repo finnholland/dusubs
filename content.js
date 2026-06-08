@@ -2,7 +2,8 @@
 
 /**
  * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
- *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean, showPinyin: boolean, toneSandhi: boolean }} Config
+ *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean,
+ *             learnMode: 'none'|'en'|'zh', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -119,7 +120,8 @@
     fontScale: 100, subPosition: 8,
     zhTrack: '', enTrack: '',
     zhColor: '#ffffff', enColor: '#ffe97a',
-    stroke: true, window: false, shadow: false, showPinyin: true, toneSandhi: true,
+    stroke: true, window: false, shadow: false,
+    learnMode: 'none', pinyinEnabled: true, sandhiEnabled: true,
   };
 
   /** @type {Config} */
@@ -198,7 +200,7 @@
     const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
     // extra top padding when the zh box is showing pinyin ruby text above characters
     const zhWinBg = cfg.window
-      ? `background:rgba(0,0,0,0.5);padding:${zhTrackIsChinese && cfg.showPinyin ? '.25em' : '0'} 10px 0;border-radius:3px;`
+      ? `background:rgba(0,0,0,0.5);padding:${zhTrackIsChinese && cfg.learnMode === 'zh' && cfg.pinyinEnabled ? '.25em' : '0'} 10px 0;border-radius:3px;`
       : '';
 
     zhBox.style.cssText = defaultBoxStyle + zhWinBg + `font-size: ${zhTrackIsChinese ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
@@ -347,6 +349,8 @@
 
   function hideTooltip() {
     tooltip.classList.remove('hpf-tip-visible');
+    const btn = tooltip.querySelector('.hpf-tip-save');
+    if (btn) { btn.textContent = 'Save word'; btn.classList.remove('saved'); }
   }
 
   function startFade() {
@@ -405,21 +409,26 @@
     }).catch(err => console.error('storage error:', err));
   }
 
-  zhBox.addEventListener('mouseover', (e) => {
-    if (!hpfDict) { loadDict(); return; }
-    const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
-    if (!ruby) return;
-    const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
-    const result = lookupWord(lastZh, idx);
-    if (!result) return;
-    const wordLen = [...result.word].length;
-    const rubyEls = [...zhBox.querySelectorAll('ruby[data-idx]')]
-      .filter(r => { const ri = parseInt(/** @type {HTMLElement} */(r).dataset.idx, 10); return ri >= idx && ri < idx + wordLen; });
-    const ctxPinyin = rubyEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
-    showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, ruby);
-  });
-
-  zhBox.addEventListener('mouseleave', startFade);
+  function attachHover(box, trackFn, getLastText) {
+    box.addEventListener('mouseover', (e) => {
+      const track = trackFn();
+      if (cfg.learnMode === 'none' || !track || !track.startsWith(cfg.learnMode)) return;
+      if (!hpfDict) { loadDict(); return; }
+      const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
+      if (!ruby) return;
+      const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
+      const result = lookupWord(getLastText(), idx);
+      if (!result) return;
+      const wordLen = [...result.word].length;
+      const rubyEls = [...box.querySelectorAll('ruby[data-idx]')]
+        .filter(r => { const ri = parseInt(/** @type {HTMLElement} */(r).dataset.idx, 10); return ri >= idx && ri < idx + wordLen; });
+      const ctxPinyin = rubyEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
+      showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, ruby);
+    });
+    box.addEventListener('mouseleave', startFade);
+  }
+  attachHover(zhBox, () => cfg.zhTrack, () => lastZh);
+  attachHover(enBox, () => cfg.enTrack, () => lastEn);
   tooltip.addEventListener('mouseenter', () => { clearTimeout(fadeTimer); fadeTimer = undefined; });
   tooltip.addEventListener('mouseleave', hideTooltip);
 
@@ -514,7 +523,7 @@
     if (pinyinArr.length !== chars.length) return escapeHtml(text);
     const rawPinyinArr = pinyinArr.slice();
     let correctedSet = /** @type {Set<number>} */ (new Set());
-    if (cfg.toneSandhi && hpfDict) {
+    if (cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
       ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
     }
     let sandhiColour = cfg.zhColor
@@ -526,7 +535,7 @@
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
         const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
         correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
-        const rt = cfg.showPinyin ? `<rt style="color:${rtColor}">${py}</rt>` : '';
+        const rt = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `<rt style="color:${rtColor}">${py}</rt>` : '';
         return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}${rt}</ruby>`;
       }
       return escaped;
@@ -534,7 +543,7 @@
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastToneSandhi = /** @type {boolean|null} */ (null);
+  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastSandhiEnabled = /** @type {boolean|null} */ (null);
 
   function tick() {
     attachOverlay();
@@ -567,10 +576,12 @@
     if (cfg.zhTrack && !zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
     if (cfg.enTrack && !en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
-    const showPinyinChanged = cfg.showPinyin !== lastShowPinyin;
-    if (showPinyinChanged) lastShowPinyin = cfg.showPinyin;
-    const toneSandhiChanged = cfg.toneSandhi !== lastToneSandhi;
-    if (toneSandhiChanged) lastToneSandhi = cfg.toneSandhi;
+    const effectivePinyin = cfg.learnMode === 'zh' && cfg.pinyinEnabled;
+    const showPinyinChanged = effectivePinyin !== lastShowPinyin;
+    if (showPinyinChanged) lastShowPinyin = effectivePinyin;
+    const effectiveSandhi = cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled;
+    const toneSandhiChanged = effectiveSandhi !== lastSandhiEnabled;
+    if (toneSandhiChanged) lastSandhiEnabled = effectiveSandhi;
 
     const zhIsZh = /^zh/i.test(cfg.zhTrack || '');
     const enIsZh = /^zh/i.test(cfg.enTrack || '');

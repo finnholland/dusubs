@@ -13,6 +13,9 @@ declare const browser: {
       removeListener(listener: (changes: Record<string, { newValue?: any; oldValue?: any }>) => void): void;
     };
   };
+  runtime: {
+    getManifest(): { version: string };
+  };
 };
 
 interface Track { languageCode: string; name: string; }
@@ -21,13 +24,16 @@ interface Settings {
   fontScale: number; subPosition: number;
   zhTrack: string; enTrack: string;
   zhColor: string; enColor: string;
-  stroke: boolean; window: boolean; shadow: boolean; showPinyin: boolean; toneSandhi: boolean;
+  stroke: boolean; window: boolean; shadow: boolean;
+  learnMode: 'none' | 'en' | 'zh';
+  pinyinEnabled: boolean; sandhiEnabled: boolean;
 }
 
 const DEFAULTS: Settings = {
   fontScale: 100, subPosition: 8, zhTrack: '', enTrack: '',
   zhColor: '#ffffff', enColor: '#ffe97a',
-  stroke: true, window: false, shadow: false, showPinyin: true, toneSandhi: true,
+  stroke: true, window: false, shadow: false,
+  learnMode: 'none', pinyinEnabled: true, sandhiEnabled: true,
 };
 
 const COLORS_ZH = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
@@ -74,10 +80,28 @@ function LinkIcon() {
   );
 }
 
-function Toggle({ id, checked, onChange }: { id: string; checked: boolean; onChange: (v: boolean) => void }) {
+function GitHubIcon() {
   return (
-    <label class="toggle">
-      <input type="checkbox" id={id} checked={checked} onChange={e => onChange((e.target as HTMLInputElement).checked)} />
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
+function Toggle({ id, checked, disabled, onChange }: { id: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label class="toggle" style={disabled ? 'opacity:0.4;pointer-events:none' : ''}>
+      <input type="checkbox" id={id} checked={checked} disabled={disabled} onChange={e => onChange((e.target as HTMLInputElement).checked)} />
       <span class="slider" />
     </label>
   );
@@ -128,7 +152,9 @@ function App() {
         zhTrack: newZh, enTrack: newEn,
         zhColor: data.zhColor, enColor: data.enColor,
         stroke: data.stroke, window: data.window, shadow: data.shadow,
-        showPinyin: data.showPinyin, toneSandhi: data.toneSandhi ?? true,
+        learnMode: data.learnMode ?? 'none',
+        pinyinEnabled: data.pinyinEnabled ?? true,
+        sandhiEnabled: data.sandhiEnabled ?? true,
       });
       setTracks(ts);
     });
@@ -207,6 +233,13 @@ function App() {
     setExportOpen(o => !o);
   }
 
+  function cycleLearnMode() {
+    const next: 'none' | 'en' | 'zh' = s.learnMode === 'none' ? 'en' : s.learnMode === 'en' ? 'zh' : 'none';
+    set('learnMode', next);
+  }
+  const learnLabel = s.learnMode === 'none' ? 'Off' : s.learnMode === 'en' ? '🇬🇧 English' : '🇨🇳 Chinese';
+  const { version } = browser.runtime.getManifest();
+
   const wordList = Object.values(words);
 
   return (
@@ -217,6 +250,23 @@ function App() {
       </div>
 
       <div class={`tab-panel${tab !== 'settings' ? ' hidden' : ''}`}>
+        <div class="learn-row">
+          <span class="learn-label">Learn mode</span>
+          <button class="learn-btn" onClick={cycleLearnMode}>{learnLabel}</button>
+        </div>
+        {s.learnMode === 'zh' && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">Pinyin</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
+            </div>
+            <div class="toggle-row">
+              <label class="name" for="tog-sandhi">Sandhi colours</label>
+              <Toggle id="tog-sandhi" checked={s.sandhiEnabled && s.pinyinEnabled} disabled={!s.pinyinEnabled} onChange={v => set('sandhiEnabled', v)} />
+            </div>
+          </div>
+        )}
+        <hr class="divider" />
         <div class="track-row">
           <div class="track-label">Top</div>
           <div class="track-controls">
@@ -255,16 +305,6 @@ function App() {
         <hr class="divider" />
 
         <div class="toggle-row">
-          <label class="name" for="tog-pinyin">Pinyin</label>
-          <Toggle id="tog-pinyin" checked={s.showPinyin} onChange={v => set('showPinyin', v)} />
-        </div>
-        <div class={`toggle-sub${s.showPinyin ? '' : ' hidden'}`}>
-          <div class="toggle-row">
-            <label class="name" for="tog-sandhi">Tone sandhi</label>
-            <Toggle id="tog-sandhi" checked={s.toneSandhi} onChange={v => set('toneSandhi', v)} />
-          </div>
-        </div>
-        <div class="toggle-row">
           <label class="name" for="tog-stroke">Stroke</label>
           <Toggle id="tog-stroke" checked={s.stroke} onChange={v => set('stroke', v)} />
         </div>
@@ -278,15 +318,21 @@ function App() {
         </div>
 
         <hr class="divider" />
-        <div class="homepage">
-          <a href="https://github.com/finnholland/dusubs">Homepage</a>
+        <div class="popup-footer">
+          <a href="https://github.com/finnholland/dusubs" target="_blank" title="GitHub">
+            <GitHubIcon /> GitHub
+          </a>
+          <a href="https://www.dusubs.com" target="_blank" title="Website">
+            <GlobeIcon /> dusubs.com
+          </a>
+          <span class="popup-version">v{version}</span>
         </div>
       </div>
 
       <div class={`tab-panel${tab !== 'words' ? ' hidden' : ''}`}>
         <div id="word-list">
           {wordList.length === 0
-            ? <p class="no-words">No saved words yet</p>
+            ? <p class="no-words">Hover a word while watching to save it.</p>
             : wordList.map(w => (
               <div key={w.zh} class="word-row">
                 <span class="word-zh">{w.zh}</span>
