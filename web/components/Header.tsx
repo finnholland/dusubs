@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { useUser, signIn, signOut } from '../lib/auth';
+import { useUser, signOut } from '../lib/auth';
+import SignInModal from './SignInModal';
 
 export default function Header() {
   const { user, loading } = useUser();
+  const [showSignIn, setShowSignIn] = useState(false);
 
   return (
-    <header className="border-b border-white/10 bg-navy-900/80 backdrop-blur sticky top-0 z-50">
+    <header className="bg-black/20 backdrop-blur sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="text-yellow-400 font-bold text-lg tracking-tight">
           DuSubs
@@ -31,14 +34,14 @@ export default function Header() {
             user ? (
               <button
                 onClick={() => signOut()}
-                className="text-white/50 hover:text-white/80 transition-colors"
+                className="text-white/50 hover:text-white/80 transition-colors cursor-pointer"
               >
                 Sign out
               </button>
             ) : (
               <button
-                onClick={() => signIn()}
-                className="bg-yellow-400 text-navy px-4 py-1.5 rounded-full text-sm font-medium hover:bg-yellow-300 transition-colors"
+                onClick={() => setShowSignIn(true)}
+                className="bg-yellow-400 text-navy px-4 py-1.5 rounded-full text-sm font-medium hover:bg-yellow-300 transition-colors cursor-pointer"
               >
                 Sign in
               </button>
@@ -46,6 +49,7 @@ export default function Header() {
           )}
         </nav>
       </div>
+      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
     </header>
   );
 }

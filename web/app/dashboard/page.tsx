@@ -70,13 +70,13 @@ export default function DashboardPage() {
         <div className="flex gap-2">
           <button
             onClick={() => handleExport('anki')}
-            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors"
+            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer"
           >
             Export Anki
           </button>
           <button
             onClick={() => handleExport('quizlet')}
-            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors"
+            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer"
           >
             Export Quizlet
           </button>
@@ -87,7 +87,7 @@ export default function DashboardPage() {
 
       {source === 'extension' && (
         <p className="text-white/50 text-sm text-center border border-white/10 rounded-xl py-3 px-4">
-          Showing local words from the extension.{' '}
+          Showing words from the extension.{' '}
           <a href="/login" className="text-yellow-400 hover:underline">Sign in</a>
           {' '}to sync across devices.
         </p>
@@ -111,7 +111,7 @@ export default function DashboardPage() {
         <button
           onClick={() => load()}
           disabled={fetching}
-          className="mx-auto border border-white/20 text-white/60 px-8 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors disabled:opacity-40"
+          className="mx-auto border border-white/20 text-white/60 px-8 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
         >
           {fetching ? 'Loading…' : 'Load more'}
         </button>

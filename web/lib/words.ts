@@ -13,13 +13,18 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebase';
 import { SavedWord } from '../types';
-import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension, deleteAllWordsFromExtension } from './extension';
+import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension } from './extension';
 
 const PAGE_SIZE = 50;
 
 interface GetWordsOptions {
   language?: SavedWord['language'];
   after?: DocumentSnapshot;
+}
+
+export function trimDefinition(en: string) {
+  const shortDef = en.split(';').slice(0, 4).join(';')
+  return shortDef.replace(/^\(.*?\) /, '')
 }
 
 export async function getWords(

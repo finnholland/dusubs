@@ -358,10 +358,12 @@
     clearTimeout(fadeTimer);
     fadeTimer = undefined;
     const alreadySaved = savedZh.has(result.word);
+    let shortDef = result.defs.split(';').slice(0, 4).join(';')
+    shortDef = shortDef.replace(/^\(.*?\) /, '')
     tooltip.innerHTML =
       `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
       `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
-      `<div class="hpf-tip-defs">${escapeHtml(result.defs)}</div>` +
+      `<div class="hpf-tip-defs">${escapeHtml(shortDef)}</div>` +
       `<button class="hpf-tip-save${alreadySaved ? ' saved' : ''}">${alreadySaved ? 'Saved ✓' : 'Save word'}</button>`;
     const saveBtn = tooltip.querySelector('.hpf-tip-save');
     if (saveBtn) saveBtn.addEventListener('click', () =>

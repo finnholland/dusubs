@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useUser, signIn } from '../lib/auth';
+import { useState } from 'react';
+import { useUser } from '../lib/auth';
+import SignInModal from '../components/SignInModal';
 
 export default function LandingPage() {
   const { user } = useUser();
+  const [showSignIn, setShowSignIn] = useState(false);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-20 flex flex-col items-center text-center gap-12">
@@ -39,13 +42,14 @@ export default function LandingPage() {
           </Link>
         ) : (
           <button
-            onClick={() => signIn()}
-            className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-white/40 transition-colors"
+            onClick={() => setShowSignIn(true)}
+            className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-white/40 transition-colors cursor-pointer"
           >
             Sign in to sync words
           </button>
         )}
       </div>
+      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
 
       {/* Feature grid */}
       <div className="grid sm:grid-cols-3 gap-6 w-full mt-4">

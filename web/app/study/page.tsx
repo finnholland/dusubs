@@ -122,7 +122,7 @@ export default function StudyPage() {
         {nextDue && <p className="text-white/50">Next review {formatDate(nextDue)}</p>}
         <button
           onClick={startFreestyle}
-          className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium"
+          className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
         >
           Freestyle — practice all words
         </button>
@@ -146,7 +146,7 @@ export default function StudyPage() {
         </div>
         <button
           onClick={startFreestyle}
-          className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium"
+          className="mt-2 px-8 py-3 rounded-full border border-white/20 text-white/60 hover:border-white/40 hover:text-white/80 transition-colors text-sm font-medium cursor-pointer"
         >
           Freestyle — practice all words
         </button>

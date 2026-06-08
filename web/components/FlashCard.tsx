@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SavedWord } from '../types';
+import { trimDefinition } from '@/lib/words';
 
 interface Props {
   word: SavedWord;
@@ -25,7 +26,7 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
         {!flipped && hintLevel < maxHints && (
           <button
             onClick={(e) => { e.stopPropagation(); setHintLevel((h) => h + 1); }}
-            className="absolute top-3 right-3 text-xs text-white/30 hover:text-white/60 border border-white/10 hover:border-white/30 rounded-full px-2.5 py-1 transition-colors"
+            className="absolute top-3 right-3 text-xs text-white/30 hover:text-white/60 border border-white/10 hover:border-white/30 rounded-full px-2.5 py-1 transition-colors cursor-pointer"
           >
             {freestyle ? `Hint ${hintLevel + 1}/3` : 'Hint'}
           </button>
@@ -55,7 +56,7 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {word.py && (
               <span className="text-white/50 text-base">{word.py}</span>
             )}
-            <span className="text-white text-xl">{word.en.split(';').slice(0, 4).join(';')}</span>
+            <span className="text-white text-xl">{trimDefinition(word.en)}</span>
             {word.sentEn && (
               <p className="text-white/40 text-sm italic mt-2">{word.sentEn}</p>
             )}
@@ -67,13 +68,13 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
         <div className="flex gap-4">
           <button
             onClick={onUnknown}
-            className="px-8 py-2 rounded-full border border-red-400/40 text-red-400 hover:bg-red-400/10 transition-colors"
+            className="px-8 py-2 rounded-full border border-red-400/40 text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
           >
             Again
           </button>
           <button
             onClick={onKnown}
-            className="px-8 py-2 rounded-full border border-green-400/40 text-green-400 hover:bg-green-400/10 transition-colors"
+            className="px-8 py-2 rounded-full border border-green-400/40 text-green-400 hover:bg-green-400/10 transition-colors cursor-pointer"
           >
             Got it
           </button>
