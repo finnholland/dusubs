@@ -256,7 +256,10 @@ function App() {
 
       <div class={`tab-panel${tab !== 'settings' ? ' hidden' : ''}`}>
         <div class="learn-row">
-          <span class="learn-label">Learn mode</span>
+          <div className="learn-subtitle">
+            <span class="learn-label">Learn mode</span>
+            {s.learnMode === 'none' && <span >(hover, definitions, saving, + more)</span>}
+          </div>
           <button class="learn-btn" onClick={cycleLearnMode}>{learnLabel}</button>
         </div>
         {s.learnMode === 'zh' && (
@@ -332,12 +335,14 @@ function App() {
 
         <hr class="divider" />
         <div class="popup-footer">
-          <a href="https://github.com/finnholland/dusubs" target="_blank" title="GitHub">
-            <GitHubIcon /> GitHub
-          </a>
-          <a href="https://www.dusubs.com" target="_blank" title="Website">
-            <GlobeIcon /> dusubs.com
-          </a>
+          <div class="footer-links">
+            <a href="https://github.com/finnholland/dusubs" target="_blank" title="GitHub">
+              <GitHubIcon /> GitHub
+            </a>
+            <a href="https://www.dusubs.com" target="_blank" title="Website">
+              <GlobeIcon /> dusubs.com
+            </a>
+          </div>
           <span class="popup-version">v{version}</span>
         </div>
       </div>

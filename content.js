@@ -731,7 +731,16 @@
     }
 
     const t = video ? video.currentTime : -1;
-    const findCue = (/** @type {'top'|'bottom'} */ slot) => cues[slot].find(c => t >= c.start && t < c.end)?.text || '';
+    // Use the last matching cue — auto-generated subs have overlapping rolling-window events;
+    // the latest-starting match is the most complete text at this moment.
+    const findCue = (/** @type {'top'|'bottom'} */ slot) => {
+      let text = '';
+      for (const c of cues[slot]) {
+        if (c.start > t) break;
+        if (t < c.end) text = c.text;
+      }
+      return text;
+    };
 
     let top = cfg.track1 ? findCue('top') : '';
     let bottom = cfg.track2 ? findCue('bottom') : '';

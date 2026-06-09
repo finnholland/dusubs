@@ -7,6 +7,7 @@ import { getWords, deleteWord, exportWords } from '../../lib/words';
 import WordCard from '../../components/WordCard';
 import LanguageFilter from '../../components/LanguageFilter';
 import { SavedWord } from '../../types';
+import SignInModal from '../../components/SignInModal';
 
 
 export default function DashboardPage() {
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const [fetching, setFetching] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [source, setSource] = useState<'firebase' | 'extension' | 'none'>('none');
+  const [showSignIn, setShowSignIn] = useState(false);
 
   const load = useCallback(
     async (reset = false) => {
@@ -88,8 +90,10 @@ export default function DashboardPage() {
       {source === 'extension' && (
         <p className="text-white/50 text-sm text-center border border-white/10 rounded-xl py-3 px-4">
           Showing words from the extension.{' '}
-          <a href="/login" className="text-yellow-400 hover:underline">Sign in</a>
-          {' '}to sync across devices.
+          <button
+            onClick={() => setShowSignIn(true)}
+            className="text-yellow-400 hover:underline">Sign in</button>
+          {' '}to sync across devices (coming soon).
         </p>
       )}
 
@@ -116,6 +120,7 @@ export default function DashboardPage() {
           {fetching ? 'Loading…' : 'Load more'}
         </button>
       )}
+      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
     </div>
   );
 }
