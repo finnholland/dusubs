@@ -47,11 +47,9 @@ export default function SettingsPage() {
       'Delete your account and all data? This cannot be undone.'
     );
     if (!confirmed) return;
-    await deleteAllWords();
     const db = getDb();
     await deleteDoc(doc(db, 'users', user.uid, 'meta', 'syncToken'));
     await user.delete();
-    router.replace('/');
   };
 
   if (loading) return null;

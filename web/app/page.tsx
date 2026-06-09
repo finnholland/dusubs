@@ -33,7 +33,7 @@ export default function LandingPage() {
         >
           Install for Firefox
         </a>
-        {user ? (
+        {/* {user ? (
           <Link
             href="/dashboard"
             className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-white/40 transition-colors"
@@ -47,7 +47,14 @@ export default function LandingPage() {
           >
             Sign in to sync words
           </button>
-        )}
+          )} */}
+          <Link href="/dashboard" className="text-white/70 hover:text-white transition-colors">
+          <button
+            className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-yellow-400 hover:text-yellow-400 transition-colors cursor-pointer"
+            >
+            Start studying
+          </button>
+            </Link>
       </div>
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
 

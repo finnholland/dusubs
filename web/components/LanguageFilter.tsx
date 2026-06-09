@@ -29,7 +29,7 @@ export default function LanguageFilter({ value, onChange }: Props) {
             onClick={() => onChange(lang.value)}
             className={`px-3 py-1 rounded-full text-sm border transition-colors cursor-pointer ${value === lang.value
                 ? 'bg-yellow-400 text-navy border-yellow-400 font-medium'
-                : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white'
+                : 'border-white/20 text-white/60 hover:border-yellow-400 hover:text-yellow-400'
               }`}
           >
             {lang.label}

@@ -70,13 +70,13 @@ export default function DashboardPage() {
         <div className="flex gap-2">
           <button
             onClick={() => handleExport('anki')}
-            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer"
+            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-yellow-400 hover:text-yellow-400 transition-colors cursor-pointer"
           >
             Export Anki
           </button>
           <button
             onClick={() => handleExport('quizlet')}
-            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer"
+            className="border border-white/20 text-white/70 px-4 py-1.5 rounded-full text-sm hover:border-yellow-400 hover:text-yellow-400 transition-colors cursor-pointer"
           >
             Export Quizlet
           </button>
