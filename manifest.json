@@ -30,6 +30,15 @@
       ]
     },
     {
+      "world": "MAIN",
+      "matches": [
+        "https://www.bilibili.com/*"
+      ],
+      "js": [
+        "bilibili-main.js"
+      ]
+    },
+    {
       "world": "ISOLATED",
       "matches": [
         "https://www.youtube.com/*",

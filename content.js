@@ -599,7 +599,11 @@
   /** @param {Record<string, string>} trackUrls */
   function fetchSubtitles(trackUrls) {
     if (!cfg.track1 && !cfg.track2) return;
-    const videoId = new URLSearchParams(location.search).get('v');
+    let videoId = new URLSearchParams(location.search).get('v');
+    if (!videoId) {
+      const m = location.pathname.match(/\/(BV\w+|av\d+)/i);
+      if (m) videoId = m[1];
+    }
     if (!videoId) return;
     LOG('fetchSubtitles track1:', cfg.track1, 'track2:', cfg.track2);
     browser.runtime.sendMessage({
@@ -637,11 +641,21 @@
       let parsed = [];
       try {
         const data = JSON.parse(resp.text);
-        parsed = (data.events || []).filter(e => e.segs).map(e => ({
-          start: e.tStartMs / 1000,
-          end: (e.tStartMs + (e.dDurationMs || 0)) / 1000,
-          text: e.segs.map(s => s.utf8 || '').join('').trim(),
-        })).filter(c => c.text);
+        if (Array.isArray(data.body)) {
+          // Bilibili format: { body: [{ from, to, content }] }
+          parsed = data.body.map(e => ({
+            start: e.from,
+            end: e.to,
+            text: (e.content || '').trim(),
+          })).filter(c => c.text);
+        } else {
+          // YouTube JSON3 format: { events: [{ tStartMs, dDurationMs, segs }] }
+          parsed = (data.events || []).filter(e => e.segs).map(e => ({
+            start: e.tStartMs / 1000,
+            end: (e.tStartMs + (e.dDurationMs || 0)) / 1000,
+            text: e.segs.map(s => s.utf8 || '').join('').trim(),
+          })).filter(c => c.text);
+        }
       } catch (_) {
         const doc = new DOMParser().parseFromString(resp.text, 'text/xml');
         parsed = [...doc.querySelectorAll('text')].map(el => ({

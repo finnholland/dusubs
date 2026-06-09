@@ -141,14 +141,7 @@ function App() {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    browser.storage.local.get({ ...DEFAULTS, availableTracks: [], zhTrack: null as string | null, enTrack: null as string | null, zhColor: null as string | null, enColor: null as string | null }).then(data => {
-      // One-time migration: zhTrack/enTrack/zhColor/enColor → track1/track2/track1Color/track2Color
-      const migrate: Record<string, string> = {};
-      if (data.zhTrack !== null && !data.track1) { data.track1 = data.zhTrack; migrate.track1 = data.zhTrack; }
-      if (data.enTrack !== null && !data.track2) { data.track2 = data.enTrack; migrate.track2 = data.enTrack; }
-      if (data.zhColor !== null && data.track1Color === DEFAULTS.track1Color) { data.track1Color = data.zhColor; migrate.track1Color = data.zhColor; }
-      if (data.enColor !== null && data.track2Color === DEFAULTS.track2Color) { data.track2Color = data.enColor; migrate.track2Color = data.enColor; }
-      if (Object.keys(migrate).length) browser.storage.local.set(migrate);
+    browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(data => {
       const ts: Track[] = data.availableTracks || [];
       const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
       if (newTop !== data.track1 || newBottom !== data.track2) {
