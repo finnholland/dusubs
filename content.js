@@ -154,13 +154,17 @@
     if (area !== 'local') return;
     let trackChanged = false;
     for (const key of Object.keys(DEFAULTS)) {
-      if (key in changes) cfg[key] = changes[key].newValue;
+      if (key in changes) {
+        // Don't let other tabs' track/mode changes bleed into this tab
+        if (document.hidden && (key === 'track1' || key === 'track2' || key === 'learnMode')) continue;
+        cfg[key] = changes[key].newValue;
+      }
     }
-    if ('track1' in changes || 'track2' in changes) {
+    if (!document.hidden && ('track1' in changes || 'track2' in changes)) {
       cues.top = []; cues.bottom = [];
       trackChanged = true;
     }
-    if ('learnMode' in changes) {
+    if (!document.hidden && 'learnMode' in changes) {
       lastTop = ''; lastBottom = '';
       if (changes.learnMode.newValue === 'ja') { loadKuromoji(); loadJaDict(); }
     }
@@ -195,11 +199,9 @@
   // ── Apply styles ───────────────────────────────────────────────────────────
   function applyStyle() {
     const scale = (cfg.fontScale || 100) / 100;
-    const sample = document.querySelector('.ytp-caption-window-container .ytp-caption-segment');
-    let baseSz = 40;
-    if (sample) { const sz = parseFloat(getComputedStyle(sample).fontSize); if (sz) baseSz = sz; }
+    const baseSz = 40;
     const cjkSz = Math.round(baseSz * scale);
-    const defaultSz = Math.round(cjkSz * .8);
+    const defaultSz = Math.round(cjkSz * 0.8);
 
     const stroke = cfg.stroke ? `${defaultSz * 0.1}px #000` : '0px #000';
     const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
@@ -581,16 +583,18 @@
   // ── Track data from MAIN world ─────────────────────────────────────────────
   /** @type {Record<string, string> | null} */
   let lastTrackUrls = null;
+  /** @type {{ languageCode: string, name: string }[]} */
+  let localTracks = [];
 
   window.addEventListener(CHANNEL, (e) => {
+    if (document.hidden) return;
     const { type, payload } = e.detail || {};
     if (type !== 'tracks') return;
     const { videoId, tracks } = payload;
     LOG('tracks from main, videoId:', videoId, 'count:', tracks.length);
     cues.top = []; cues.bottom = [];
-    browser.storage.local.set({
-      availableTracks: tracks.map(t => ({ languageCode: t.code, name: t.name })),
-    }).catch(() => { });
+    localTracks = tracks.map(t => ({ languageCode: t.code, name: t.name }));
+    browser.storage.local.set({ availableTracks: localTracks }).catch(() => { });
     lastTrackUrls = Object.fromEntries(tracks.map(t => [t.code, t.url]));
     fetchSubtitles(lastTrackUrls);
   });
@@ -612,8 +616,9 @@
     }).catch(err => LOG('fetch-subtitles failed:', err));
   }
 
-  browser.runtime.onMessage.addListener((msg) => {
+  browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'subtitle-url') {
+      if (document.hidden) return;
       let slot = null;
       if (msg.lang === 'top' || msg.lang === 'bottom') {
         slot = msg.lang;
@@ -623,6 +628,16 @@
         else if (cfg.track2 && cfg.track2.startsWith(msg.lang)) slot = 'bottom';
       }
       if (slot) parseCues(slot, msg.url);
+    }
+    if (msg.type === 'get-tab-config') {
+      sendResponse({ track1: cfg.track1, track2: cfg.track2, learnMode: cfg.learnMode, availableTracks: localTracks });
+      return true;
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && lastTrackUrls && (cfg.track1 || cfg.track2) && !cues.top.length && !cues.bottom.length) {
+      fetchSubtitles(lastTrackUrls);
     }
   });
 
@@ -714,6 +729,7 @@
   let lastTop = '', lastBottom = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastSandhiEnabled = /** @type {boolean|null} */ (null);
 
   function tick() {
+    if (document.hidden) return;
     attachOverlay();
     applyStyle();
 
@@ -791,6 +807,7 @@
   let siteSubsStyleEl = null;
 
   function hideSiteSubs() {
+    if (document.hidden) return;
     if (!cfg.track1 && !cfg.track2) return;
     if (siteSubsHidden || (!lastTop && !lastBottom)) return;
     const hide = document.createElement('style');

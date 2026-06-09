@@ -16,6 +16,10 @@ declare const browser: {
   runtime: {
     getManifest(): { version: string };
   };
+  tabs: {
+    query(queryInfo: { active: boolean; currentWindow: boolean }): Promise<Array<{ id?: number }>>;
+    sendMessage(tabId: number, message: any): Promise<any>;
+  };
 };
 
 interface Track { languageCode: string; name: string; }
@@ -141,7 +145,10 @@ function App() {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(data => {
+    // Get the active tab ID upfront so we can query its in-memory state
+    const tabQuery = browser.tabs.query({ active: true, currentWindow: true });
+
+    browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(async data => {
       const ts: Track[] = data.availableTracks || [];
       const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
       if (newTop !== data.track1 || newBottom !== data.track2) {
@@ -157,6 +164,19 @@ function App() {
         sandhiEnabled: data.sandhiEnabled ?? true,
       });
       setTracks(ts);
+
+      // Override track1/track2/availableTracks with the active tab's actual in-memory state
+      try {
+        const tabs = await tabQuery;
+        const id = tabs[0]?.id;
+        if (id !== undefined) {
+          const resp = await browser.tabs.sendMessage(id, { type: 'get-tab-config' });
+          if (resp) {
+            setS(prev => ({ ...prev, track1: resp.track1, track2: resp.track2, learnMode: resp.learnMode ?? prev.learnMode }));
+            if (resp.availableTracks?.length) setTracks(resp.availableTracks);
+          }
+        }
+      } catch { /* content script not injected on this tab — storage values are fine */ }
     });
 
     function onChanged(changes: Record<string, { newValue?: any }>) {

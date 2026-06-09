@@ -5,6 +5,7 @@
   "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
   "permissions": [
     "activeTab",
+    "tabs",
     "storage",
     "webRequest",
     "https://www.dusubs.com/*",
