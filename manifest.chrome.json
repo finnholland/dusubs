@@ -1,5 +1,5 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Dusubs",
   "version": "1.0",
   "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
@@ -7,17 +7,16 @@
     "activeTab",
     "tabs",
     "storage",
-    "webRequest",
+    "webRequest"
+  ],
+  "host_permissions": [
     "https://www.dusubs.com/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
     "*://*.bilivideo.com/*"
   ],
   "background": {
-    "scripts": [
-      "background.js"
-    ],
-    "persistent": false
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -66,7 +65,7 @@
   "icons": {
     "512": "icon.png"
   },
-  "browser_action": {
+  "action": {
     "default_popup": "popup.html",
     "default_title": "Hanzi Pinyin Subtitles",
     "default_icon": {
@@ -74,19 +73,28 @@
     }
   },
   "web_accessible_resources": [
-    "cedict.json",
-    "ja-dict.json",
-    "dict/base.dat.gz",
-    "dict/check.dat.gz",
-    "dict/tid.dat.gz",
-    "dict/tid_pos.dat.gz",
-    "dict/tid_map.dat.gz",
-    "dict/unk.dat.gz",
-    "dict/unk_pos.dat.gz",
-    "dict/unk_map.dat.gz",
-    "dict/unk_char.dat.gz",
-    "dict/unk_compat.dat.gz",
-    "dict/unk_invoke.dat.gz",
-    "dict/cc.dat.gz"
+    {
+      "resources": [
+        "cedict.json",
+        "ja-dict.json",
+        "dict/base.dat.gz",
+        "dict/check.dat.gz",
+        "dict/tid.dat.gz",
+        "dict/tid_pos.dat.gz",
+        "dict/tid_map.dat.gz",
+        "dict/unk.dat.gz",
+        "dict/unk_pos.dat.gz",
+        "dict/unk_map.dat.gz",
+        "dict/unk_char.dat.gz",
+        "dict/unk_compat.dat.gz",
+        "dict/unk_invoke.dat.gz",
+        "dict/cc.dat.gz"
+      ],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.bilibili.com/*"
+      ]
+    }
   ]
 }

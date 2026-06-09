@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './firebase';
 import { SavedWord } from '../types';
-import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension } from './extension';
+import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension, deleteAllWordsFromExtension } from './extension';
 
 const PAGE_SIZE = 50;
 
@@ -68,6 +68,16 @@ export async function deleteWord(uid: string | null, wordId: string, key?: strin
     return;
   }
   await deleteDoc(doc(getDb(), 'users', uid, 'words', wordId));
+}
+
+export async function deleteAllWords(uid: string | null): Promise<void> {
+  if (!uid) {
+    deleteAllWordsFromExtension();
+    return;
+  }
+  const ref = collection(getDb(), 'users', uid, 'words');
+  const snap = await getDocs(query(ref));
+  await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
 }
 
 export function exportWords(

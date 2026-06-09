@@ -2,7 +2,7 @@ import { render } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import './popup.css';
 
-declare const browser: {
+const browser: {
   storage: {
     local: {
       get(keys: Record<string, unknown>): Promise<Record<string, any>>;
@@ -20,7 +20,8 @@ declare const browser: {
     query(queryInfo: { active: boolean; currentWindow: boolean }): Promise<Array<{ id?: number }>>;
     sendMessage(tabId: number, message: any): Promise<any>;
   };
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+} = (globalThis as any).browser ?? (globalThis as any).chrome;
 
 interface Track { languageCode: string; name: string; }
 interface SavedWord { zh: string; py: string; en: string; url?: string; sentZh?: string; sentEn?: string; }
@@ -261,8 +262,8 @@ function App() {
   }
   const learnLabel =
     s.learnMode === 'none' ? 'Off' :
-      s.learnMode === 'zh' ? '🇨🇳 Chinese' :
-        '🇯🇵 Japanese';
+      s.learnMode === 'zh' ? '中 Chinese' :
+        '日 Japanese';
   const { version } = browser.runtime.getManifest();
 
   const wordList = Object.values(words);

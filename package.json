@@ -5,6 +5,8 @@
     "postinstall": "node scripts/make-dict.js && node scripts/build-ja-dict.js",
     "build": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact",
     "watch": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact --watch",
+    "watch:ff": "node -e \"require('fs').copyFileSync('manifest.firefox.json','manifest.json')\" && npm run watch",
+    "watch:chrome": "node -e \"require('fs').copyFileSync('manifest.chrome.json','manifest.json')\" && npm run watch",
     "build:ja-dict": "node scripts/build-ja-dict.js"
   },
   "devDependencies": {

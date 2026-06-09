@@ -1,6 +1,8 @@
 // @ts-check
 // Bridges window.postMessage from the web app to browser.storage.local.
 // Runs as an ISOLATED content script on the web app origin.
+/* global chrome */
+const browser = globalThis.browser ?? globalThis.chrome;
 console.log('[dusubs] web-bridge injected');
 
 window.addEventListener('message', async (e) => {

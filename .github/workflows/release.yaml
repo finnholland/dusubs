@@ -1,5 +1,5 @@
 # .github/workflows/release.yml
-name: Build & Release Firefox Extension
+name: Build & Release Extension
 
 on:
   push:
@@ -24,29 +24,40 @@ jobs:
           mv jmdict-english*.json scripts/jmdict-english.json
 
       - name: "Install dependencies (postinstall generates cedict.json + ja-dict.json)"
-        if: ${{ hashFiles('package.json') != '' }}
         run: npm ci
 
       - name: Copy kuromoji dict files
         run: cp -r node_modules/kuromoji/dict/ dict/
 
       - name: Build extension
-        if: ${{ hashFiles('package.json') != '' }}
         run: npm run build
 
       - name: Install web-ext
         run: npm install -g web-ext
 
-      - name: Sign extension (via AMO)
+      - name: Sign Firefox extension (via AMO)
         run: |
           web-ext sign \
             --source-dir . \
-            --artifacts-dir ./artifacts \
+            --artifacts-dir ./artifacts-firefox \
+            --ignore-files manifest.chrome.json \
             --api-key ${{ secrets.AMO_API_KEY }} \
             --api-secret ${{ secrets.AMO_API_SECRET }}
+
+      - name: Build Chrome extension (MV3)
+        run: |
+          cp manifest.chrome.json manifest.json
+          web-ext build \
+            --source-dir . \
+            --artifacts-dir ./artifacts-chrome \
+            --filename dusubs-chrome.zip \
+            --ignore-files manifest.firefox.json manifest.chrome.json
+          cp manifest.firefox.json manifest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./artifacts/*.xpi
+          files: |
+            ./artifacts-firefox/*.xpi
+            ./artifacts-chrome/dusubs-chrome.zip
           generate_release_notes: true

@@ -9,6 +9,8 @@
 
 (function () {
   'use strict';
+  /* global chrome */
+  const browser = globalThis.browser ?? globalThis.chrome;
 
   const CHANNEL = 'hpf-main-isolated';
   const LOG = (...a) => console.log('[HPF]', ...a);

@@ -1,4 +1,6 @@
 // @ts-check
+/* global chrome */
+const browser = globalThis.browser ?? globalThis.chrome;
 
 /**
  * @param {string} url
