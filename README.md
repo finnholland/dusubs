@@ -110,3 +110,5 @@ web/                    Next.js companion site (dusubs.com)
 - Pinyin computation by [zh-lx/pinyin-pro](https://github.com/zh-lx/pinyin-pro)
 - Japanese tokenisation by [kuromoji](https://github.com/takuyaa/kuromoji)
 - Chinese definitions from [CC-CEDICT](https://cc-cedict.org/wiki/)
+
+### Also try the [Zhongwen](https://addons.mozilla.org/en-US/firefox/addon/zhongwen/) extension by Christian Schiller
