@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @typedef {{ fontScale: number, subPosition: number, zhTrack: string, enTrack: string,
- *             zhColor: string, enColor: string, stroke: boolean, window: boolean, shadow: boolean,
+ * @typedef {{ fontScale: number, subPosition: number, track1: string, track2: string,
+ *             track1Color: string, track2Color: string, stroke: boolean, window: boolean, shadow: boolean,
  *             learnMode: 'none'|'en'|'zh'|'ja', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
@@ -94,10 +94,10 @@
   document.head.appendChild(styleEl);
 
   const root = document.createElement('div'); root.id = 'hpf-root';
-  const zhBox = document.createElement('div'); zhBox.className = 'hpf-box';
-  const enBox = document.createElement('div'); enBox.className = 'hpf-box';
-  root.appendChild(zhBox);
-  root.appendChild(enBox);
+  const topBox = document.createElement('div'); topBox.className = 'hpf-box';
+  const bottomBox = document.createElement('div'); bottomBox.className = 'hpf-box';
+  root.appendChild(topBox);
+  root.appendChild(bottomBox);
 
   const tooltip = document.createElement('div'); tooltip.id = 'hpf-tooltip';
 
@@ -123,8 +123,8 @@
   /** @type {Config} */
   const DEFAULTS = {
     fontScale: 100, subPosition: 8,
-    zhTrack: '', enTrack: '',
-    zhColor: '#ffffff', enColor: '#ffe97a',
+    track1: '', track2: '',
+    track1Color: '#ffffff', track2Color: '#ffe97a',
     stroke: true, window: false, shadow: false,
     learnMode: 'none', pinyinEnabled: true, sandhiEnabled: true,
   };
@@ -135,7 +135,14 @@
   /** @type {Set<string>} */
   const savedZh = new Set();
 
-  browser.storage.local.get({ ...DEFAULTS, savedWords: {} }).then(s => {
+  browser.storage.local.get({ ...DEFAULTS, savedWords: {}, zhTrack: null, enTrack: null, zhColor: null, enColor: null }).then(s => {
+    // One-time migration: zhTrack/enTrack/zhColor/enColor → track1/track2/track1Color/track2Color
+    const migrate = {};
+    if (s.zhTrack !== null && !s.track1) { s.track1 = s.zhTrack; migrate.track1 = s.zhTrack; }
+    if (s.enTrack !== null && !s.track2) { s.track2 = s.enTrack; migrate.track2 = s.enTrack; }
+    if (s.zhColor !== null && s.track1Color === DEFAULTS.track1Color) { s.track1Color = s.zhColor; migrate.track1Color = s.zhColor; }
+    if (s.enColor !== null && s.track2Color === DEFAULTS.track2Color) { s.track2Color = s.enColor; migrate.track2Color = s.enColor; }
+    if (Object.keys(migrate).length) browser.storage.local.set(migrate);
     cfg = s;
     LOG('cfg:', JSON.stringify(cfg));
     applyStyle();
@@ -149,12 +156,12 @@
     for (const key of Object.keys(DEFAULTS)) {
       if (key in changes) cfg[key] = changes[key].newValue;
     }
-    if ('zhTrack' in changes || 'enTrack' in changes) {
-      cues.zh = []; cues.en = [];
+    if ('track1' in changes || 'track2' in changes) {
+      cues.top = []; cues.bottom = [];
       trackChanged = true;
     }
     if ('learnMode' in changes) {
-      lastZh = ''; lastEn = '';
+      lastTop = ''; lastBottom = '';
       if (changes.learnMode.newValue === 'ja') { loadKuromoji(); loadJaDict(); }
     }
     applyStyle();
@@ -177,16 +184,24 @@
     }
   });
 
+  // ── Language detection ─────────────────────────────────────────────────────
+  /** @param {string} code @returns {'zh' | 'ja' | 'en'} */
+  function detectLang(code) {
+    if (/^zh/i.test(code)) return 'zh';
+    if (/^ja/i.test(code)) return 'ja';
+    return 'en';
+  }
+
   // ── Apply styles ───────────────────────────────────────────────────────────
   function applyStyle() {
     const scale = (cfg.fontScale || 100) / 100;
     const sample = document.querySelector('.ytp-caption-window-container .ytp-caption-segment');
     let baseSz = 40;
     if (sample) { const sz = parseFloat(getComputedStyle(sample).fontSize); if (sz) baseSz = sz; }
-    const zhSz = Math.round(baseSz * scale);
-    const defaultSize = Math.round(zhSz * .8);
+    const cjkSz = Math.round(baseSz * scale);
+    const defaultSz = Math.round(cjkSz * .8);
 
-    const stroke = cfg.stroke ? `${defaultSize * 0.1}px #000` : '0px #000';
+    const stroke = cfg.stroke ? `${defaultSz * 0.1}px #000` : '0px #000';
     const shadow = cfg.shadow ? '0px 0px 6px rgba(0,0,0,1)' : 'none';
     const defaultBoxStyle = `
       font-family: Arial, sans-serif;
@@ -196,32 +211,32 @@
       paint-order: stroke fill;
       text-shadow: ${shadow};
     `;
-    // Chinese-specific kerning — only applied when the track is actually Chinese
-    const zhKerning = `
+    const cjkExtras = `
       font-family: sans-serif;
-      letter-spacing: ${cfg.showPinyin ? '0' : '.15em'};
-      line-height: 'normal';
-      font-size: ${zhSz}px;
+      letter-spacing: 0;
+      line-height: normal;
+      font-size: ${cjkSz}px;
     `;
 
-    const zhTrackIsChinese = /^zh/i.test(cfg.zhTrack || '');
-    const zhTrackIsJapanese = /^ja/i.test(cfg.zhTrack || '');
-    const enTrackIsChinese = /^zh/i.test(cfg.enTrack || '');
-    const enTrackIsJapanese = /^ja/i.test(cfg.enTrack || '');
+    const topLang = detectLang(cfg.track1 || '');
+    const bottomLang = detectLang(cfg.track2 || '');
+    /** @param {'zh'|'ja'|'en'} lang */
+    const isCjk = (lang) => lang === 'zh' || lang === 'ja';
 
-    const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
-    const zhNeedsRubyPadding =
-      (zhTrackIsChinese && cfg.learnMode === 'zh' && cfg.pinyinEnabled) ||
-      (zhTrackIsJapanese && cfg.learnMode === 'ja' && cfg.pinyinEnabled);
-    const zhWinBg = cfg.window
-      ? `background:rgba(0,0,0,0.5);padding:${zhNeedsRubyPadding ? '.25em' : '0'} 10px 0;border-radius:3px;`
+    const topNeedsRubyPad = cfg.pinyinEnabled && (
+      (topLang === 'zh' && cfg.learnMode === 'zh') ||
+      (topLang === 'ja' && cfg.learnMode === 'ja')
+    );
+    const topWinBg = cfg.window
+      ? `background:rgba(0,0,0,0.5);padding:${topNeedsRubyPad ? '.25em' : '0'} 10px 0;border-radius:3px;`
       : '';
+    const winBg = cfg.window ? 'background:rgba(0,0,0,0.5);padding:0 10px;border-radius:3px;' : '';
 
-    zhBox.style.cssText = defaultBoxStyle + zhWinBg + `font-size: ${(zhTrackIsChinese || zhTrackIsJapanese) ? zhSz : defaultSize}px; color: ${cfg.zhColor};` + (zhTrackIsChinese ? zhKerning : '');
-    enBox.style.cssText = defaultBoxStyle + winBg + `font-size: ${defaultSize}px; color: ${cfg.enColor}; margin-top: 4px;` + ((enTrackIsChinese || enTrackIsJapanese) ? zhKerning : '');
+    topBox.style.cssText = defaultBoxStyle + topWinBg + `color: ${cfg.track1Color};` + (isCjk(topLang) ? cjkExtras : `font-size: ${defaultSz}px;`);
+    bottomBox.style.cssText = defaultBoxStyle + winBg + `color: ${cfg.track2Color}; margin-top: 4px;` + (isCjk(bottomLang) ? cjkExtras : `font-size: ${defaultSz}px;`);
 
-    root.style.display = (cfg.zhTrack || cfg.enTrack) ? '' : 'none';
-    if (!cfg.zhTrack && !cfg.enTrack) showSiteSubs();
+    root.style.display = (cfg.track1 || cfg.track2) ? '' : 'none';
+    if (!cfg.track1 && !cfg.track2) showSiteSubs();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -295,7 +310,7 @@
       XMLHttpRequest.prototype.open = origOpen; // restore
       Object.values(blobs).forEach(URL.revokeObjectURL);
       LOG('kuromoji loaded ✓');
-      lastZh = ''; lastEn = '';
+      lastTop = ''; lastBottom = '';
     } catch (e) {
       XMLHttpRequest.prototype.open = origOpen;
       LOG('kuromoji load failed:', e);
@@ -447,7 +462,7 @@
   let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
   function positionTooltip(anchor) {
-    const r = (anchor || zhBox).getBoundingClientRect();
+    const r = (anchor || topBox).getBoundingClientRect();
     const gap = 8;
     const rt = anchor && anchor.querySelector('rt');
     const rtGap = rt ? rt.getBoundingClientRect().height : 0;
@@ -480,7 +495,7 @@
     fadeTimer = undefined;
     const alreadySaved = savedZh.has(result.word);
     tooltip.innerHTML =
-      `<div class="hpf-tip-word" style="color:${cfg.zhColor}">${escapeHtml(result.word)}</div>` +
+      `<div class="hpf-tip-word" style="color:${cfg.track1Color}">${escapeHtml(result.word)}</div>` +
       `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
       `<div class="hpf-tip-defs">${escapeHtml(trimDefinition(result.defs))}</div>` +
       `<button class="hpf-tip-save${alreadySaved ? ' saved' : ''}">${alreadySaved ? 'Saved ✓' : 'Save word'}</button>`;
@@ -499,7 +514,7 @@
     const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
     const url = baseUrl + sep + 't=' + Math.floor(t);
     const sentField = `sent${cfg.learnMode.charAt(0).toUpperCase()}${cfg.learnMode.slice(1)}`;
-    const entry = { [cfg.learnMode]: result.word, py: result.pinyin, en: trimDefinition(result.defs), [sentField]: lastZh, sentEn: lastEn, url, language: cfg.learnMode };
+    const entry = { [cfg.learnMode]: result.word, py: result.pinyin, en: trimDefinition(result.defs), [sentField]: lastTop, sentEn: lastBottom, url, language: cfg.learnMode };
     browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
       savedWords[result.word] = entry;
       return browser.storage.local.set({ savedWords });
@@ -558,8 +573,8 @@
     });
     box.addEventListener('mouseleave', startFade);
   }
-  attachHover(zhBox, () => cfg.zhTrack, () => lastZh);
-  attachHover(enBox, () => cfg.enTrack, () => lastEn);
+  attachHover(topBox, () => cfg.track1, () => lastTop);
+  attachHover(bottomBox, () => cfg.track2, () => lastBottom);
   tooltip.addEventListener('mouseenter', () => { clearTimeout(fadeTimer); fadeTimer = undefined; });
   tooltip.addEventListener('mouseleave', hideTooltip);
 
@@ -572,7 +587,7 @@
     if (type !== 'tracks') return;
     const { videoId, tracks } = payload;
     LOG('tracks from main, videoId:', videoId, 'count:', tracks.length);
-    cues.zh = []; cues.en = [];
+    cues.top = []; cues.bottom = [];
     browser.storage.local.set({
       availableTracks: tracks.map(t => ({ languageCode: t.code, name: t.name })),
     }).catch(() => { });
@@ -583,31 +598,39 @@
   // ── Subtitle fetching ──────────────────────────────────────────────────────
   /** @param {Record<string, string>} trackUrls */
   function fetchSubtitles(trackUrls) {
-    if (!cfg.zhTrack && !cfg.enTrack) return;
+    if (!cfg.track1 && !cfg.track2) return;
     const videoId = new URLSearchParams(location.search).get('v');
     if (!videoId) return;
-    LOG('fetchSubtitles zh:', cfg.zhTrack, 'en:', cfg.enTrack);
+    LOG('fetchSubtitles track1:', cfg.track1, 'track2:', cfg.track2);
     browser.runtime.sendMessage({
       type: 'fetch-subtitles', videoId,
-      zhTrack: cfg.zhTrack, enTrack: cfg.enTrack, tracks: trackUrls,
+      track1: cfg.track1, track2: cfg.track2, tracks: trackUrls,
     }).catch(err => LOG('fetch-subtitles failed:', err));
   }
 
   browser.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'subtitle-url' && (msg.lang === 'zh' || msg.lang === 'en')) {
-      parseCues(msg.lang, msg.url);
+    if (msg.type === 'subtitle-url') {
+      let slot = null;
+      if (msg.lang === 'top' || msg.lang === 'bottom') {
+        slot = msg.lang;
+      } else {
+        // passive intercept sends guessed lang prefix ('zh', 'en', etc.) — map to slot
+        if (cfg.track1 && cfg.track1.startsWith(msg.lang)) slot = 'top';
+        else if (cfg.track2 && cfg.track2.startsWith(msg.lang)) slot = 'bottom';
+      }
+      if (slot) parseCues(slot, msg.url);
     }
   });
 
   // ── Cue parsing ────────────────────────────────────────────────────────────
-  /** @type {{ zh: Cue[], en: Cue[] }} */
-  const cues = { zh: [], en: [] };
+  /** @type {{ top: Cue[], bottom: Cue[] }} */
+  const cues = { top: [], bottom: [] };
 
   /**
-   * @param {'zh' | 'en'} lang
+   * @param {'top' | 'bottom'} slot
    * @param {string} url
    */
-  async function parseCues(lang, url) {
+  async function parseCues(slot, url) {
     try {
       const resp = await browser.runtime.sendMessage({ type: 'fetch-text', url });
       if (!resp?.ok) return;
@@ -628,13 +651,13 @@
         })).filter(c => c.text);
       }
       if (parsed.length) {
-        cues[lang] = parsed;
-        LOG(`parseCues(${lang}) ${parsed.length} cues, first:`, JSON.stringify(parsed[0]));
+        cues[slot] = parsed;
+        LOG(`parseCues(${slot}) ${parsed.length} cues, first:`, JSON.stringify(parsed[0]));
       } else {
-        LOG(`parseCues(${lang}) 0 cues, preview:`, resp.text?.slice(0, 200));
+        LOG(`parseCues(${slot}) 0 cues, preview:`, resp.text?.slice(0, 200));
       }
     } catch (err) {
-      LOG(`parseCues(${lang}) exception:`, err);
+      LOG(`parseCues(${slot}) exception:`, err);
     }
   }
 
@@ -657,13 +680,13 @@
     if (cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
       ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
     }
-    let sandhiColour = cfg.zhColor
-    if (sandhiColour === '#ffffff') sandhiColour = cfg.enColor;
+    let sandhiColour = cfg.track1Color;
+    if (sandhiColour === '#ffffff') sandhiColour = cfg.track2Color;
     if (sandhiColour === '#ffffff') sandhiColour = '#ffe97a';
     return chars.map((char, i) => {
       const py = pinyinArr[i] || '';
       const escaped = escapeHtml(char);
-      if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
+      if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
         const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
         correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
         const rt = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `<rt style="color:${rtColor}">${py}</rt>` : '';
@@ -674,7 +697,7 @@
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────
-  let lastZh = '', lastEn = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastSandhiEnabled = /** @type {boolean|null} */ (null);
+  let lastTop = '', lastBottom = '', lastLogTime = -1, lastShowPinyin = /** @type {boolean|null} */ (null), lastSandhiEnabled = /** @type {boolean|null} */ (null);
 
   function tick() {
     attachOverlay();
@@ -694,18 +717,18 @@
     }
 
     const t = video ? video.currentTime : -1;
-    const findCue = (lang) => cues[lang].find(c => t >= c.start && t < c.end)?.text || '';
+    const findCue = (/** @type {'top'|'bottom'} */ slot) => cues[slot].find(c => t >= c.start && t < c.end)?.text || '';
 
-    let zh = cfg.zhTrack ? findCue('zh') : '';
-    let en = cfg.enTrack ? findCue('en') : '';
+    let top = cfg.track1 ? findCue('top') : '';
+    let bottom = cfg.track2 ? findCue('bottom') : '';
 
     if (t > 0 && Math.floor(t) % 2 === 0 && Math.floor(t) !== lastLogTime) {
       lastLogTime = Math.floor(t);
-      LOG(`t=${t.toFixed(1)}s zh=${cues.zh.length} en=${cues.en.length} | "${zh}" / "${en}"`);
+      LOG(`t=${t.toFixed(1)}s top=${cues.top.length} bottom=${cues.bottom.length} | "${top}" / "${bottom}"`);
     }
 
-    if (cfg.zhTrack && !zh && !cues.zh.length) zh = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
-    if (cfg.enTrack && !en && !cues.en.length) en = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
+    if (cfg.track1 && !top && !cues.top.length) top = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
+    if (cfg.track2 && !bottom && !cues.bottom.length) bottom = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
     const effectivePinyin = (cfg.learnMode === 'zh' || cfg.learnMode === 'ja') && cfg.pinyinEnabled;
     const showPinyinChanged = effectivePinyin !== lastShowPinyin;
@@ -717,26 +740,24 @@
     if (cfg.learnMode === 'ja' && !kuromoji) loadKuromoji();
     if (cfg.learnMode === 'ja' && !jaDict) loadJaDict();
 
-    const zhIsZh = /^zh/i.test(cfg.zhTrack || '');
-    const zhIsJa = /^ja/i.test(cfg.zhTrack || '');
-    const enIsZh = /^zh/i.test(cfg.enTrack || '');
-    const enIsJa = /^ja/i.test(cfg.enTrack || '');
+    const topLang = detectLang(cfg.track1 || '');
+    const bottomLang = detectLang(cfg.track2 || '');
 
-    if (zh !== lastZh || showPinyinChanged || toneSandhiChanged) {
-      lastZh = zh;
-      if (zhIsZh && cfg.learnMode === 'zh') zhBox.innerHTML = renderRuby(zh);
-      else if (zhIsJa && cfg.learnMode === 'ja') zhBox.innerHTML = renderJapanese(zh);
-      else zhBox.textContent = zh;
+    if (top !== lastTop || showPinyinChanged || toneSandhiChanged) {
+      lastTop = top;
+      if (topLang === 'zh' && cfg.learnMode === 'zh') topBox.innerHTML = renderRuby(top);
+      else if (topLang === 'ja' && cfg.learnMode === 'ja') topBox.innerHTML = renderJapanese(top);
+      else topBox.textContent = top;
     }
-    if (en !== lastEn || showPinyinChanged || toneSandhiChanged) {
-      lastEn = en;
-      if (enIsZh && cfg.learnMode === 'zh') enBox.innerHTML = renderRuby(en);
-      else if (enIsJa && cfg.learnMode === 'ja') enBox.innerHTML = renderJapanese(en);
-      else enBox.textContent = en;
+    if (bottom !== lastBottom || showPinyinChanged || toneSandhiChanged) {
+      lastBottom = bottom;
+      if (bottomLang === 'zh' && cfg.learnMode === 'zh') bottomBox.innerHTML = renderRuby(bottom);
+      else if (bottomLang === 'ja' && cfg.learnMode === 'ja') bottomBox.innerHTML = renderJapanese(bottom);
+      else bottomBox.textContent = bottom;
     }
 
-    zhBox.style.display = zh ? '' : 'none';
-    enBox.style.display = (cfg.enTrack && en) ? '' : 'none';
+    topBox.style.display = top ? '' : 'none';
+    bottomBox.style.display = (cfg.track2 && bottom) ? '' : 'none';
   }
 
   loadDict();
@@ -747,8 +768,8 @@
   let siteSubsStyleEl = null;
 
   function hideSiteSubs() {
-    if (!cfg.zhTrack && !cfg.enTrack) return;
-    if (siteSubsHidden || (!lastZh && !lastEn)) return;
+    if (!cfg.track1 && !cfg.track2) return;
+    if (siteSubsHidden || (!lastTop && !lastBottom)) return;
     const hide = document.createElement('style');
     hide.textContent = `
       .ytp-caption-window-container { opacity: 0 !important; }

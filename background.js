@@ -26,7 +26,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // Proactive subtitle fetch — content.js sends the exact player URLs
   if (msg.type === 'fetch-subtitles') {
-    const { videoId, zhTrack, enTrack, tracks } = msg;
+    const { videoId, track1, track2, tracks } = msg;
     const tabId = sender.tab?.id;
     if (!tabId) { sendResponse({ ok: false }); return; }
 
@@ -50,8 +50,8 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     };
 
     Promise.all([
-      fetchAndForward(zhTrack, 'zh'),
-      fetchAndForward(enTrack, 'en'),
+      fetchAndForward(track1, 'top'),
+      fetchAndForward(track2, 'bottom'),
     ]).then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
     return true;
   }

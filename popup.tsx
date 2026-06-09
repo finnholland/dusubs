@@ -22,16 +22,16 @@ interface Track { languageCode: string; name: string; }
 interface SavedWord { zh: string; py: string; en: string; url?: string; sentZh?: string; sentEn?: string; }
 interface Settings {
   fontScale: number; subPosition: number;
-  zhTrack: string; enTrack: string;
-  zhColor: string; enColor: string;
+  track1: string; track2: string;
+  track1Color: string; track2Color: string;
   stroke: boolean; window: boolean; shadow: boolean;
   learnMode: 'none' | 'zh' | 'ja';
   pinyinEnabled: boolean; sandhiEnabled: boolean;
 }
 
 const DEFAULTS: Settings = {
-  fontScale: 100, subPosition: 8, zhTrack: '', enTrack: '',
-  zhColor: '#ffffff', enColor: '#ffe97a',
+  fontScale: 100, subPosition: 8, track1: '', track2: '',
+  track1Color: '#ffffff', track2Color: '#ffe97a',
   stroke: true, window: false, shadow: false,
   learnMode: 'none' as 'none' | 'zh' | 'ja', pinyinEnabled: true, sandhiEnabled: true,
 };
@@ -53,10 +53,10 @@ function downloadText(content: string, filename: string) {
   a.click();
 }
 
-function autoSelect(tracks: Track[], zhTrack: string, enTrack: string) {
-  const newZh = zhTrack || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
-  const newEn = enTrack || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
-  return { newZh, newEn };
+function autoSelect(tracks: Track[], track1: string, track2: string) {
+  const newTop = track1 || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
+  const newBottom = track2 || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
+  return { newTop, newBottom };
 }
 
 function TrashIcon() {
@@ -141,16 +141,23 @@ function App() {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(data => {
+    browser.storage.local.get({ ...DEFAULTS, availableTracks: [], zhTrack: null as string | null, enTrack: null as string | null, zhColor: null as string | null, enColor: null as string | null }).then(data => {
+      // One-time migration: zhTrack/enTrack/zhColor/enColor → track1/track2/track1Color/track2Color
+      const migrate: Record<string, string> = {};
+      if (data.zhTrack !== null && !data.track1) { data.track1 = data.zhTrack; migrate.track1 = data.zhTrack; }
+      if (data.enTrack !== null && !data.track2) { data.track2 = data.enTrack; migrate.track2 = data.enTrack; }
+      if (data.zhColor !== null && data.track1Color === DEFAULTS.track1Color) { data.track1Color = data.zhColor; migrate.track1Color = data.zhColor; }
+      if (data.enColor !== null && data.track2Color === DEFAULTS.track2Color) { data.track2Color = data.enColor; migrate.track2Color = data.enColor; }
+      if (Object.keys(migrate).length) browser.storage.local.set(migrate);
       const ts: Track[] = data.availableTracks || [];
-      const { newZh, newEn } = autoSelect(ts, data.zhTrack, data.enTrack);
-      if (newZh !== data.zhTrack || newEn !== data.enTrack) {
-        browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
+      const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
+      if (newTop !== data.track1 || newBottom !== data.track2) {
+        browser.storage.local.set({ track1: newTop, track2: newBottom });
       }
       setS({
         fontScale: data.fontScale, subPosition: data.subPosition,
-        zhTrack: newZh, enTrack: newEn,
-        zhColor: data.zhColor, enColor: data.enColor,
+        track1: newTop, track2: newBottom,
+        track1Color: data.track1Color, track2Color: data.track2Color,
         stroke: data.stroke, window: data.window, shadow: data.shadow,
         learnMode: data.learnMode ?? 'none',
         pinyinEnabled: data.pinyinEnabled ?? true,
@@ -163,12 +170,12 @@ function App() {
       if ('availableTracks' in changes) {
         const ts: Track[] = changes.availableTracks.newValue;
         setTracks(ts);
-        browser.storage.local.get({ zhTrack: '', enTrack: '' }).then(data => {
-          const { newZh, newEn } = autoSelect(ts, data.zhTrack, data.enTrack);
-          if (newZh !== data.zhTrack || newEn !== data.enTrack) {
-            browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
+        browser.storage.local.get({ track1: '', track2: '' }).then(data => {
+          const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
+          if (newTop !== data.track1 || newBottom !== data.track2) {
+            browser.storage.local.set({ track1: newTop, track2: newBottom });
           }
-          setS(prev => ({ ...prev, zhTrack: newZh, enTrack: newEn }));
+          setS(prev => ({ ...prev, track1: newTop, track2: newBottom }));
         });
       }
     }
@@ -283,20 +290,20 @@ function App() {
         <div class="track-row">
           <div class="track-label">Top</div>
           <div class="track-controls">
-            <select id="zh-track" value={s.zhTrack} onChange={e => set('zhTrack', (e.target as HTMLSelectElement).value)}>
+            <select id="track1" value={s.track1} onChange={e => set('track1', (e.target as HTMLSelectElement).value)}>
               <TrackOptions tracks={tracks} />
             </select>
-            <ColorSelect id="zh-color" value={s.zhColor} colorOrder={COLORS_ZH} onChange={v => set('zhColor', v)} />
+            <ColorSelect id="track1-color" value={s.track1Color} colorOrder={COLORS_ZH} onChange={v => set('track1Color', v)} />
           </div>
         </div>
 
         <div class="track-row">
           <div class="track-label">Bottom</div>
           <div class="track-controls">
-            <select id="en-track" value={s.enTrack} onChange={e => set('enTrack', (e.target as HTMLSelectElement).value)}>
+            <select id="track2" value={s.track2} onChange={e => set('track2', (e.target as HTMLSelectElement).value)}>
               <TrackOptions tracks={tracks} />
             </select>
-            <ColorSelect id="en-color" value={s.enColor} colorOrder={COLORS_EN} onChange={v => set('enColor', v)} />
+            <ColorSelect id="track2-color" value={s.track2Color} colorOrder={COLORS_EN} onChange={v => set('track2Color', v)} />
           </div>
         </div>
 
