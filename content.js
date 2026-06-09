@@ -564,16 +564,16 @@
       }
 
       if (!hpfDict) { loadDict(); return; }
-      const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
-      if (!ruby) return;
-      const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
+      const charEl = /** @type {Element} */ (e.target).closest('[data-idx]');
+      if (!charEl) return;
+      const idx = parseInt(/** @type {HTMLElement} */(charEl).dataset.idx, 10);
       const result = lookupWord(getLastText(), idx);
       if (!result) return;
       const wordLen = [...result.word].length;
-      const rubyEls = [...box.querySelectorAll('ruby[data-idx]')]
+      const charEls = [...box.querySelectorAll('[data-idx]')]
         .filter(r => { const ri = parseInt(/** @type {HTMLElement} */(r).dataset.idx, 10); return ri >= idx && ri < idx + wordLen; });
-      const ctxPinyin = rubyEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
-      showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, ruby);
+      const ctxPinyin = charEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
+      showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, charEl);
     });
     box.addEventListener('mouseleave', startFade);
   }
@@ -720,8 +720,8 @@
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
         const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
         correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
-        const rt = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `<rt style="color:${rtColor}">${py}</rt>` : '';
-        return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}${rt}</ruby>`;
+        const rtStyle = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `color:${rtColor}` : 'visibility:hidden';
+        return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}<rt style="${rtStyle}">${py}</rt></ruby>`;
       }
       return escaped;
     }).join('');
