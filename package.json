@@ -2,7 +2,7 @@
   "name": "dusubs",
   "private": true,
   "scripts": {
-    "postinstall": "node scripts/make-dict.js && node scripts/build-ja-dict.js",
+    "postinstall": "node scripts/make-dict.js && node scripts/build-ja-dict.js && node -e \"require('fs').readdirSync('node_modules/kuromoji/dict').forEach(f => require('fs').copyFileSync('node_modules/kuromoji/dict/' + f, 'dict/' + f))\"",
     "build": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact",
     "watch": "esbuild popup.tsx --bundle --outfile=popup.bundle.js --jsx=automatic --jsx-import-source=preact --watch",
     "watch:ff": "node -e \"require('fs').copyFileSync('manifest.firefox.json','manifest.json')\" && npm run watch",
