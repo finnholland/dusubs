@@ -1,0 +1,85 @@
+import {
+  collection,
+  query,
+  orderBy,
+  where,
+  limit,
+  startAfter,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  doc,
+  DocumentSnapshot,
+} from 'firebase/firestore';
+import { getDb } from './firebase';
+import { SavedWord } from '../types';
+import { getWordsFromExtension, saveWordToExtension, deleteWordFromExtension } from './extension';
+
+const PAGE_SIZE = 50;
+
+interface GetWordsOptions {
+  language?: SavedWord['language'];
+  after?: DocumentSnapshot;
+}
+
+export async function getWords(
+  uid: string | null,
+  { language, after }: GetWordsOptions = {}
+): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'none' }> {
+  if (!uid) {
+    const words = await getWordsFromExtension();
+    if (words) {
+      const filtered = language ? words.filter((w) => w.language === language) : words;
+      return { words: filtered, lastDoc: null, source: 'extension' };
+    }
+    return { words: [], lastDoc: null, source: 'none' };
+  }
+
+  const ref = collection(getDb(), 'users', uid, 'words');
+  const constraints = [
+    ...(language ? [where('language', '==', language)] : []),
+    orderBy('savedAt', 'desc'),
+    limit(PAGE_SIZE),
+    ...(after ? [startAfter(after)] : []),
+  ];
+  const q = query(ref, ...constraints);
+  const snap = await getDocs(q);
+  const words = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SavedWord));
+  const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
+  return { words, lastDoc, source: 'firebase' };
+}
+
+export async function saveWord(
+  uid: string | null,
+  word: Omit<SavedWord, 'id'>
+): Promise<string> {
+  if (!uid) {
+    saveWordToExtension(word);
+    return word.zh ?? word.ja ?? word.en;
+  }
+  const ref = collection(getDb(), 'users', uid, 'words');
+  const docRef = await addDoc(ref, word);
+  return docRef.id;
+}
+
+export async function deleteWord(uid: string | null, wordId: string, key?: string): Promise<void> {
+  if (!uid) {
+    if (key) deleteWordFromExtension(key);
+    return;
+  }
+  await deleteDoc(doc(getDb(), 'users', uid, 'words', wordId));
+}
+
+export function exportWords(
+  words: SavedWord[],
+  format: 'anki' | 'quizlet'
+): string {
+  if (format === 'anki') {
+    return words
+      .map((w) => `${w.zh ?? w.ja ?? w.en}\t${w.en}${w.py ? ` [${w.py}]` : ''}${w.sentEn ? `\n${w.sentEn}` : ''}`)
+      .join('\n');
+  }
+  return words
+    .map((w) => `${w.zh ?? w.ja ?? w.en}, ${w.en}${w.py ? ` [${w.py}]` : ''}`)
+    .join('\n');
+}

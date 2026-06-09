@@ -13,21 +13,27 @@ declare const browser: {
       removeListener(listener: (changes: Record<string, { newValue?: any; oldValue?: any }>) => void): void;
     };
   };
+  runtime: {
+    getManifest(): { version: string };
+  };
 };
 
 interface Track { languageCode: string; name: string; }
 interface SavedWord { zh: string; py: string; en: string; url?: string; sentZh?: string; sentEn?: string; }
 interface Settings {
   fontScale: number; subPosition: number;
-  zhTrack: string; enTrack: string;
-  zhColor: string; enColor: string;
-  stroke: boolean; window: boolean; shadow: boolean; showPinyin: boolean; toneSandhi: boolean;
+  track1: string; track2: string;
+  track1Color: string; track2Color: string;
+  stroke: boolean; window: boolean; shadow: boolean;
+  learnMode: 'none' | 'zh' | 'ja';
+  pinyinEnabled: boolean; sandhiEnabled: boolean;
 }
 
 const DEFAULTS: Settings = {
-  fontScale: 100, subPosition: 8, zhTrack: '', enTrack: '',
-  zhColor: '#ffffff', enColor: '#ffe97a',
-  stroke: true, window: false, shadow: false, showPinyin: true, toneSandhi: true,
+  fontScale: 100, subPosition: 8, track1: '', track2: '',
+  track1Color: '#ffffff', track2Color: '#ffe97a',
+  stroke: true, window: false, shadow: false,
+  learnMode: 'none' as 'none' | 'zh' | 'ja', pinyinEnabled: true, sandhiEnabled: true,
 };
 
 const COLORS_ZH = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
@@ -47,10 +53,10 @@ function downloadText(content: string, filename: string) {
   a.click();
 }
 
-function autoSelect(tracks: Track[], zhTrack: string, enTrack: string) {
-  const newZh = zhTrack || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
-  const newEn = enTrack || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
-  return { newZh, newEn };
+function autoSelect(tracks: Track[], track1: string, track2: string) {
+  const newTop = track1 || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
+  const newBottom = track2 || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
+  return { newTop, newBottom };
 }
 
 function TrashIcon() {
@@ -74,10 +80,28 @@ function LinkIcon() {
   );
 }
 
-function Toggle({ id, checked, onChange }: { id: string; checked: boolean; onChange: (v: boolean) => void }) {
+function GitHubIcon() {
   return (
-    <label class="toggle">
-      <input type="checkbox" id={id} checked={checked} onChange={e => onChange((e.target as HTMLInputElement).checked)} />
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
+function Toggle({ id, checked, disabled, onChange }: { id: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label class="toggle" style={disabled ? 'opacity:0.4;pointer-events:none' : ''}>
+      <input type="checkbox" id={id} checked={checked} disabled={disabled} onChange={e => onChange((e.target as HTMLInputElement).checked)} />
       <span class="slider" />
     </label>
   );
@@ -119,16 +143,18 @@ function App() {
   useEffect(() => {
     browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(data => {
       const ts: Track[] = data.availableTracks || [];
-      const { newZh, newEn } = autoSelect(ts, data.zhTrack, data.enTrack);
-      if (newZh !== data.zhTrack || newEn !== data.enTrack) {
-        browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
+      const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
+      if (newTop !== data.track1 || newBottom !== data.track2) {
+        browser.storage.local.set({ track1: newTop, track2: newBottom });
       }
       setS({
         fontScale: data.fontScale, subPosition: data.subPosition,
-        zhTrack: newZh, enTrack: newEn,
-        zhColor: data.zhColor, enColor: data.enColor,
+        track1: newTop, track2: newBottom,
+        track1Color: data.track1Color, track2Color: data.track2Color,
         stroke: data.stroke, window: data.window, shadow: data.shadow,
-        showPinyin: data.showPinyin, toneSandhi: data.toneSandhi ?? true,
+        learnMode: data.learnMode ?? 'none',
+        pinyinEnabled: data.pinyinEnabled ?? true,
+        sandhiEnabled: data.sandhiEnabled ?? true,
       });
       setTracks(ts);
     });
@@ -137,12 +163,12 @@ function App() {
       if ('availableTracks' in changes) {
         const ts: Track[] = changes.availableTracks.newValue;
         setTracks(ts);
-        browser.storage.local.get({ zhTrack: '', enTrack: '' }).then(data => {
-          const { newZh, newEn } = autoSelect(ts, data.zhTrack, data.enTrack);
-          if (newZh !== data.zhTrack || newEn !== data.enTrack) {
-            browser.storage.local.set({ zhTrack: newZh, enTrack: newEn });
+        browser.storage.local.get({ track1: '', track2: '' }).then(data => {
+          const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
+          if (newTop !== data.track1 || newBottom !== data.track2) {
+            browser.storage.local.set({ track1: newTop, track2: newBottom });
           }
-          setS(prev => ({ ...prev, zhTrack: newZh, enTrack: newEn }));
+          setS(prev => ({ ...prev, track1: newTop, track2: newBottom }));
         });
       }
     }
@@ -170,8 +196,7 @@ function App() {
 
   function exportAnki() {
     const lines = Object.values(words).map(w => {
-      const en = w.en.split(';').slice(0, 4).join(';');
-      let back = `${escHtml(w.py)}<br>${escHtml(en)}`;
+      let back = `${escHtml(w.py)}<br>${escHtml(w.en)}`;
       if (w.sentEn || w.sentZh) {
         back += `<br><i>${escHtml([w.sentZh, w.sentEn].filter(Boolean).join(' · '))}</i>`;
       }
@@ -183,7 +208,7 @@ function App() {
 
   function exportQuizlet() {
     const lines = Object.values(words).map(w =>
-      `${w.zh}\t${w.py} · ${w.en.split(';').slice(0, 2).join(';')}`
+      `${w.zh}\t${w.py} · ${w.en}`
     );
     downloadText(lines.join('\n'), 'saved-words-quizlet.txt');
     setExportOpen(false);
@@ -208,6 +233,18 @@ function App() {
     setExportOpen(o => !o);
   }
 
+  function cycleLearnMode() {
+    const next: 'none' | 'zh' | 'ja' =
+      s.learnMode === 'none' ? 'zh' :
+        s.learnMode === 'zh' ? 'ja' : 'none';
+    set('learnMode', next);
+  }
+  const learnLabel =
+    s.learnMode === 'none' ? 'Off' :
+      s.learnMode === 'zh' ? '🇨🇳 Chinese' :
+        '🇯🇵 Japanese';
+  const { version } = browser.runtime.getManifest();
+
   const wordList = Object.values(words);
 
   return (
@@ -218,23 +255,51 @@ function App() {
       </div>
 
       <div class={`tab-panel${tab !== 'settings' ? ' hidden' : ''}`}>
+        <div class="learn-row">
+          <div className="learn-subtitle">
+            <span class="learn-label">Learn mode</span>
+            {s.learnMode === 'none' && <span >(hover, definitions, saving, + more)</span>}
+          </div>
+          <button class="learn-btn" onClick={cycleLearnMode}>{learnLabel}</button>
+        </div>
+        {s.learnMode === 'zh' && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">Pinyin</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
+            </div>
+            <div class="toggle-row">
+              <label class="name" for="tog-sandhi">Sandhi colours</label>
+              <Toggle id="tog-sandhi" checked={s.sandhiEnabled && s.pinyinEnabled} disabled={!s.pinyinEnabled} onChange={v => set('sandhiEnabled', v)} />
+            </div>
+          </div>
+        )}
+        {s.learnMode === 'ja' && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">Furigana</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
+            </div>
+          </div>
+        )}
+        <hr class="divider" />
         <div class="track-row">
           <div class="track-label">Top</div>
           <div class="track-controls">
-            <select id="zh-track" value={s.zhTrack} onChange={e => set('zhTrack', (e.target as HTMLSelectElement).value)}>
+            <select id="track1" value={s.track1} onChange={e => set('track1', (e.target as HTMLSelectElement).value)}>
               <TrackOptions tracks={tracks} />
             </select>
-            <ColorSelect id="zh-color" value={s.zhColor} colorOrder={COLORS_ZH} onChange={v => set('zhColor', v)} />
+            <ColorSelect id="track1-color" value={s.track1Color} colorOrder={COLORS_ZH} onChange={v => set('track1Color', v)} />
           </div>
         </div>
 
         <div class="track-row">
           <div class="track-label">Bottom</div>
           <div class="track-controls">
-            <select id="en-track" value={s.enTrack} onChange={e => set('enTrack', (e.target as HTMLSelectElement).value)}>
+            <select id="track2" value={s.track2} onChange={e => set('track2', (e.target as HTMLSelectElement).value)}>
               <TrackOptions tracks={tracks} />
             </select>
-            <ColorSelect id="en-color" value={s.enColor} colorOrder={COLORS_EN} onChange={v => set('enColor', v)} />
+            <ColorSelect id="track2-color" value={s.track2Color} colorOrder={COLORS_EN} onChange={v => set('track2Color', v)} />
           </div>
         </div>
 
@@ -256,16 +321,6 @@ function App() {
         <hr class="divider" />
 
         <div class="toggle-row">
-          <label class="name" for="tog-pinyin">Pinyin</label>
-          <Toggle id="tog-pinyin" checked={s.showPinyin} onChange={v => set('showPinyin', v)} />
-        </div>
-        <div class={`toggle-sub${s.showPinyin ? '' : ' hidden'}`}>
-          <div class="toggle-row">
-            <label class="name" for="tog-sandhi">Tone sandhi</label>
-            <Toggle id="tog-sandhi" checked={s.toneSandhi} onChange={v => set('toneSandhi', v)} />
-          </div>
-        </div>
-        <div class="toggle-row">
           <label class="name" for="tog-stroke">Stroke</label>
           <Toggle id="tog-stroke" checked={s.stroke} onChange={v => set('stroke', v)} />
         </div>
@@ -279,15 +334,23 @@ function App() {
         </div>
 
         <hr class="divider" />
-        <div class="homepage">
-          <a href="https://github.com/finnholland/dusub">Homepage</a>
+        <div class="popup-footer">
+          <div class="footer-links">
+            <a href="https://github.com/finnholland/dusubs" target="_blank" title="GitHub">
+              <GitHubIcon /> GitHub
+            </a>
+            <a href="https://www.dusubs.com" target="_blank" title="Website">
+              <GlobeIcon /> dusubs.com
+            </a>
+          </div>
+          <span class="popup-version">v{version}</span>
         </div>
       </div>
 
       <div class={`tab-panel${tab !== 'words' ? ' hidden' : ''}`}>
         <div id="word-list">
           {wordList.length === 0
-            ? <p class="no-words">No saved words yet</p>
+            ? <p class="no-words">Hover a word while watching to save it.</p>
             : wordList.map(w => (
               <div key={w.zh} class="word-row">
                 <span class="word-zh">{w.zh}</span>
