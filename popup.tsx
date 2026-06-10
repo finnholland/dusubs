@@ -58,11 +58,6 @@ function downloadText(content: string, filename: string) {
   a.click();
 }
 
-function autoSelect(tracks: Track[], track1: string, track2: string) {
-  const newTop = track1 || tracks.find(t => t.languageCode.startsWith('zh'))?.languageCode || '';
-  const newBottom = track2 || tracks.find(t => t.languageCode.startsWith('en'))?.languageCode || '';
-  return { newTop, newBottom };
-}
 
 function TrashIcon() {
   return (
@@ -144,53 +139,44 @@ function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tabIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Get the active tab ID upfront so we can query its in-memory state
-    const tabQuery = browser.tabs.query({ active: true, currentWindow: true });
+    type TabConfig = { track1: string; track2: string; learnMode: string; availableTracks: Track[] };
 
     browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(async data => {
-      const ts: Track[] = data.availableTracks || [];
-      const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
-      if (newTop !== data.track1 || newBottom !== data.track2) {
-        browser.storage.local.set({ track1: newTop, track2: newBottom });
-      }
+      let tabConfig: TabConfig | null = null;
+      try {
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        const id = tabs[0]?.id;
+        if (id !== undefined) {
+          tabIdRef.current = id;
+          tabConfig = await browser.tabs.sendMessage(id, { type: 'get-tab-config' });
+        }
+      } catch { /* content script not injected — not a YouTube/Bilibili tab */ }
+
+      setTracks(tabConfig?.availableTracks || []);
       setS({
         fontScale: data.fontScale, subPosition: data.subPosition,
-        track1: newTop, track2: newBottom,
+        track1: tabConfig?.track1 ?? '',
+        track2: tabConfig?.track2 ?? '',
         track1Color: data.track1Color, track2Color: data.track2Color,
         stroke: data.stroke, window: data.window, shadow: data.shadow,
-        learnMode: data.learnMode ?? 'none',
+        learnMode: (tabConfig?.learnMode ?? data.learnMode ?? 'none') as 'none' | 'zh' | 'ja',
         pinyinEnabled: data.pinyinEnabled ?? true,
         sandhiEnabled: data.sandhiEnabled ?? true,
       });
-      setTracks(ts);
-
-      // Override track1/track2/availableTracks with the active tab's actual in-memory state
-      try {
-        const tabs = await tabQuery;
-        const id = tabs[0]?.id;
-        if (id !== undefined) {
-          const resp = await browser.tabs.sendMessage(id, { type: 'get-tab-config' });
-          if (resp) {
-            setS(prev => ({ ...prev, track1: resp.track1, track2: resp.track2, learnMode: resp.learnMode ?? prev.learnMode }));
-            if (resp.availableTracks?.length) setTracks(resp.availableTracks);
-          }
-        }
-      } catch { /* content script not injected on this tab — storage values are fine */ }
     });
 
     function onChanged(changes: Record<string, { newValue?: any }>) {
       if ('availableTracks' in changes) {
-        const ts: Track[] = changes.availableTracks.newValue;
-        setTracks(ts);
-        browser.storage.local.get({ track1: '', track2: '' }).then(data => {
-          const { newTop, newBottom } = autoSelect(ts, data.track1, data.track2);
-          if (newTop !== data.track1 || newBottom !== data.track2) {
-            browser.storage.local.set({ track1: newTop, track2: newBottom });
-          }
-          setS(prev => ({ ...prev, track1: newTop, track2: newBottom }));
-        });
+        setTracks(changes.availableTracks.newValue || []);
+        const id = tabIdRef.current;
+        if (id !== null) {
+          browser.tabs.sendMessage(id, { type: 'get-tab-config' })
+            .then(resp => { if (resp) setS(prev => ({ ...prev, track1: resp.track1, track2: resp.track2 })); })
+            .catch(() => {});
+        }
       }
     }
     browser.storage.onChanged.addListener(onChanged);
@@ -204,8 +190,16 @@ function App() {
   }, [tab]);
 
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
-    setS(prev => ({ ...prev, [key]: value }));
-    browser.storage.local.set({ [key]: value });
+    setS(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === 'track1' || key === 'track2') {
+        const id = tabIdRef.current;
+        if (id !== null) browser.tabs.sendMessage(id, { type: 'set-track', track1: next.track1, track2: next.track2 }).catch(() => {});
+      } else {
+        browser.storage.local.set({ [key]: value });
+      }
+      return next;
+    });
   }
 
   function deleteWord(zh: string) {

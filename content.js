@@ -145,7 +145,7 @@
     if (s.zhColor !== null && s.track1Color === DEFAULTS.track1Color) { s.track1Color = s.zhColor; migrate.track1Color = s.zhColor; }
     if (s.enColor !== null && s.track2Color === DEFAULTS.track2Color) { s.track2Color = s.enColor; migrate.track2Color = s.enColor; }
     if (Object.keys(migrate).length) browser.storage.local.set(migrate);
-    cfg = s;
+    cfg = { ...s, track1: DEFAULTS.track1, track2: DEFAULTS.track2 };
     LOG('cfg:', JSON.stringify(cfg));
     applyStyle();
     for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
@@ -154,24 +154,17 @@
 
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    let trackChanged = false;
     for (const key of Object.keys(DEFAULTS)) {
       if (key in changes) {
-        // Don't let other tabs' track/mode changes bleed into this tab
-        if (document.hidden && (key === 'track1' || key === 'track2' || key === 'learnMode')) continue;
+        if (key === 'track1' || key === 'track2') continue; // per-tab; changed only via set-track message
         cfg[key] = changes[key].newValue;
       }
     }
-    if (!document.hidden && ('track1' in changes || 'track2' in changes)) {
-      cues.top = []; cues.bottom = [];
-      trackChanged = true;
-    }
-    if (!document.hidden && 'learnMode' in changes) {
+    if ('learnMode' in changes) {
       lastTop = ''; lastBottom = '';
       if (changes.learnMode.newValue === 'ja') { loadKuromoji(); loadJaDict(); }
     }
     applyStyle();
-    if (trackChanged && lastTrackUrls) fetchSubtitles(lastTrackUrls);
 
     if ('savedWords' in changes) {
       const oldKeys = new Set(Object.keys(changes.savedWords.oldValue || {}));
@@ -587,6 +580,7 @@
   let lastTrackUrls = null;
   /** @type {{ languageCode: string, name: string }[]} */
   let localTracks = [];
+  let trackManuallySet = false;
 
   window.addEventListener(CHANNEL, (e) => {
     if (document.hidden) return;
@@ -598,6 +592,11 @@
     localTracks = tracks.map(t => ({ languageCode: t.code, name: t.name }));
     browser.storage.local.set({ availableTracks: localTracks }).catch(() => { });
     lastTrackUrls = Object.fromEntries(tracks.map(t => [t.code, t.url]));
+    if (!trackManuallySet) {
+      const tlist = /** @type {{ code: string }[]} */ (tracks);
+      if (!cfg.track1) cfg.track1 = tlist.find(t => t.code.startsWith('zh'))?.code || tlist.find(t => t.code.startsWith('ja'))?.code || '';
+      if (!cfg.track2) cfg.track2 = tlist.find(t => t.code.startsWith('en'))?.code || '';
+    }
     fetchSubtitles(lastTrackUrls);
   });
 
@@ -633,6 +632,20 @@
     }
     if (msg.type === 'get-tab-config') {
       sendResponse({ track1: cfg.track1, track2: cfg.track2, learnMode: cfg.learnMode, availableTracks: localTracks });
+      return true;
+    }
+    if (msg.type === 'set-track') {
+      const t1 = msg.track1 ?? cfg.track1;
+      const t2 = msg.track2 ?? cfg.track2;
+      const changed = t1 !== cfg.track1 || t2 !== cfg.track2;
+      cfg.track1 = t1; cfg.track2 = t2;
+      trackManuallySet = true;
+      if (changed) {
+        cues.top = []; cues.bottom = [];
+        lastTop = ''; lastBottom = '';
+        if (lastTrackUrls) fetchSubtitles(lastTrackUrls);
+      }
+      sendResponse({ ok: true });
       return true;
     }
   });
