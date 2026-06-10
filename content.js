@@ -362,11 +362,11 @@
       const escapedBase = escapeHtml(baseForm);
       if (hasKanji(surface) && reading) {
         const hi = escapeHtml(toHiragana(reading));
-        const rt = cfg.pinyinEnabled ? `<rt>${hi}</rt>` : '';
-        return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}${rt}</ruby></span>`;
+        const rtStyle = cfg.pinyinEnabled ? '' : 'visibility:hidden';
+        return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
       }
-      return cfg.pinyinEnabled && hasKanji(text) ?
-        `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt/></ruby></span>` :
+      return hasKanji(text) ?
+        `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? '' : 'visibility:hidden'}"/></ruby></span>` :
         `<span class="dusub-word" data-base="${escapedBase}">${escapedSurface}</span>`;
     }).join('');
   }

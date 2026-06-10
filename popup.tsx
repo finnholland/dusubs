@@ -20,7 +20,7 @@ const browser: {
     query(queryInfo: { active: boolean; currentWindow: boolean }): Promise<Array<{ id?: number }>>;
     sendMessage(tabId: number, message: any): Promise<any>;
   };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } = (globalThis as any).browser ?? (globalThis as any).chrome;
 
 interface Track { languageCode: string; name: string; }
@@ -355,7 +355,7 @@ function App() {
               <GitHubIcon /> GitHub
             </a>
             <a href="https://www.dusubs.com" target="_blank" title="Website">
-              <GlobeIcon /> dusubs.com
+              读 dusubs.com
             </a>
           </div>
           <span class="popup-version">v{version}</span>

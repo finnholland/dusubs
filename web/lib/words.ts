@@ -80,16 +80,29 @@ export async function deleteAllWords(uid: string | null): Promise<void> {
   await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
 }
 
+function escHtml(s: string) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export function exportWords(
   words: SavedWord[],
   format: 'anki' | 'quizlet'
 ): string {
   if (format === 'anki') {
     return words
-      .map((w) => `${w.zh ?? w.ja ?? w.en}\t${w.en}${w.py ? ` [${w.py}]` : ''}${w.sentEn ? `\n${w.sentEn}` : ''}`)
+      .map((w) => {
+        const front = w.zh ?? w.ja ?? w.en ?? '';
+        let back = `${escHtml(w.py ?? '')}${w.py ? '<br>' : ''}${escHtml(w.en ?? '')}`;
+        const sentZh = w.sentZh ?? w.sentJa ?? '';
+        const sentEn = w.sentEn ?? '';
+        if (sentZh || sentEn) {
+          back += `<br><i>${escHtml([sentZh, sentEn].filter(Boolean).join(' · '))}</i>`;
+        }
+        return `${front}\t${back}`;
+      })
       .join('\n');
   }
   return words
-    .map((w) => `${w.zh ?? w.ja ?? w.en}, ${w.en}${w.py ? ` [${w.py}]` : ''}`)
+    .map((w) => `${w.zh ?? w.ja ?? w.en ?? ''}\t${w.py ? `${w.py} · ` : ''}${w.en ?? ''}`)
     .join('\n');
 }
