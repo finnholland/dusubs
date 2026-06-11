@@ -9,3 +9,4 @@ dict/
 ja-dict.json
 scripts/jmdict-english.json
 artifacts-chrome/dusubs-chrome.zip
+/web/cdk-dusubs-hosting
