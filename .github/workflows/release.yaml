@@ -27,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Copy kuromoji dict files
-        run: cp -r node_modules/kuromoji/dict/ dict/
+        run: cp -r node_modules/kuromoji/dict/ extension/dict/
 
       - name: Build extension
         run: npm run build
@@ -37,22 +37,23 @@ jobs:
 
       - name: Sign Firefox extension (via AMO)
         run: |
+          cp extension/manifests/manifest.firefox.json extension/manifest.json
           web-ext sign \
-            --source-dir . \
+            --source-dir extension \
             --artifacts-dir ./artifacts-firefox \
-            --ignore-files manifest.chrome.json \
+            --ignore-files manifests/manifest.chrome.json manifests/manifest.firefox.json manifests/manifest.json \
             --api-key ${{ secrets.AMO_API_KEY }} \
             --api-secret ${{ secrets.AMO_API_SECRET }}
 
       - name: Build Chrome extension (MV3)
         run: |
-          cp manifest.chrome.json manifest.json
+          cp extension/manifests/manifest.chrome.json extension/manifest.json
           web-ext build \
-            --source-dir . \
+            --source-dir extension \
             --artifacts-dir ./artifacts-chrome \
             --filename dusubs-chrome.zip \
-            --ignore-files manifest.firefox.json manifest.chrome.json
-          cp manifest.firefox.json manifest.json
+            --ignore-files manifests/manifest.firefox.json manifests/manifest.chrome.json manifests/manifest.json
+          cp extension/manifests/manifest.firefox.json extension/manifest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

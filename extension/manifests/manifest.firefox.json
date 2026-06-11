@@ -15,7 +15,7 @@
   ],
   "background": {
     "scripts": [
-      "background.js"
+      "src/background.js"
     ],
     "persistent": false
   },
@@ -27,7 +27,7 @@
         "https://m.youtube.com/*"
       ],
       "js": [
-        "youtube-main.js"
+        "src/youtube-main.js"
       ]
     },
     {
@@ -36,7 +36,7 @@
         "https://www.bilibili.com/*"
       ],
       "js": [
-        "bilibili-main.js"
+        "src/bilibili-main.js"
       ]
     },
     {
@@ -47,9 +47,9 @@
         "https://www.bilibili.com/*"
       ],
       "js": [
-        "pinyin-pro.js",
-        "kuromoji.js",
-        "content.js"
+        "vendor/pinyin-pro.js",
+        "vendor/kuromoji.js",
+        "src/content.js"
       ]
     },
     {
@@ -59,23 +59,23 @@
         "https://www.dusubs.com/*"
       ],
       "js": [
-        "web-bridge.js"
+        "src/web-bridge.js"
       ]
     }
   ],
   "icons": {
-    "512": "icon.png"
+    "512": "assets/icon.png"
   },
   "browser_action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup.html",
     "default_title": "Hanzi Pinyin Subtitles",
     "default_icon": {
-      "512": "icon.png"
+      "512": "assets/icon.png"
     }
   },
   "web_accessible_resources": [
-    "cedict.json",
-    "ja-dict.json",
+    "vendor/cedict.json",
+    "vendor/ja-dict.json",
     "dict/base.dat.gz",
     "dict/check.dat.gz",
     "dict/tid.dat.gz",

@@ -251,7 +251,7 @@
     if (hpfDict || dictLoading) return;
     dictLoading = true;
     try {
-      const resp = await fetch(browser.runtime.getURL('cedict.json'));
+      const resp = await fetch(browser.runtime.getURL('vendor/cedict.json'));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       hpfDict = await resp.json();
       LOG('dict loaded:', Object.keys(hpfDict).length, 'entries');
@@ -334,7 +334,7 @@
     if (jaDict || jaDictLoading) return;
     jaDictLoading = true;
     try {
-      const resp = await fetch(browser.runtime.getURL('ja-dict.json'));
+      const resp = await fetch(browser.runtime.getURL('vendor/ja-dict.json'));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       jaDict = await resp.json();
       LOG('jaDict loaded:', Object.keys(jaDict).length, 'entries');

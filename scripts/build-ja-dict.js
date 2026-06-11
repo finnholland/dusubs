@@ -100,7 +100,7 @@ for (const entry of jmdict.words) {
   }
 }
 
-const outPath = path.join(__dirname, '..', 'ja-dict.json');
+const outPath = path.join(__dirname, '..', 'extension/vendor/ja-dict.json');
 fs.writeFileSync(outPath, JSON.stringify(out));
 const mb = (fs.statSync(outPath).size / 1024 / 1024).toFixed(1);
 console.log(`Built ja-dict.json: ${Object.keys(out).length} entries (${mb} MB)`);
