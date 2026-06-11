@@ -9,4 +9,8 @@ dict/
 ja-dict.json
 scripts/jmdict-english.json
 artifacts-chrome/dusubs-chrome.zip
-/web/cdk-dusubs-hosting
+
+# kiki — env-specific deployment outputs (ARNs, endpoints, infra IDs)
+kiki.defaults.*.json
+# kiki — regenerated CDK app directories
+cdk-*/
