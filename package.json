@@ -5,6 +5,7 @@
     "postinstall": "node scripts/make-dict.js && node scripts/build-ja-dict.js && node -e \"require('fs').readdirSync('node_modules/kuromoji/dict').forEach(f => require('fs').copyFileSync('node_modules/kuromoji/dict/' + f, 'extension/dict/' + f))\"",
     "build": "esbuild extension/src/popup.tsx --bundle --outfile=extension/src/popup.bundle.js --jsx=automatic --jsx-import-source=preact",
     "build:web": "cd web && npm run build",
+    "dev": "cd web && npm run dev",
     "watch": "esbuild extension/src/popup.tsx --bundle --outfile=extension/src/popup.bundle.js --jsx=automatic --jsx-import-source=preact --watch",
     "watch:ff": "node -e \"require('fs').copyFileSync('extension/manifests/manifest.firefox.json','extension/manifest.json')\" && npm run watch",
     "watch:chrome": "node -e \"require('fs').copyFileSync('extension/manifests/manifest.chrome.json','extension/manifest.json')\" && npm run watch",

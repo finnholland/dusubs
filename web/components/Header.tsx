@@ -2,12 +2,26 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useUser, signOut } from '../lib/auth';
 import SignInModal from './SignInModal';
 
 export default function Header() {
   const { user, loading } = useUser();
   const [showSignIn, setShowSignIn] = useState(false);
+  const pathname = usePathname();
+
+  const navLink = (href: string, label: string) => {
+    const active = pathname === href || pathname.startsWith(href + '/');
+    return (
+      <Link
+        href={href}
+        className={`transition-colors ${active ? 'text-yellow-400 underline underline-offset-4' : 'text-white/70 hover:text-white'}`}
+      >
+        {label}
+      </Link>
+    );
+  };
 
   return (
     <header className="bg-black/20 backdrop-blur sticky top-0 z-50">
@@ -16,20 +30,10 @@ export default function Header() {
           DuSubs
         </Link>
 
-        <nav className="flex items-center gap-6 text-sm w-full sm:w-auto justify-around sm:justify-start">
-
-          <>
-            <Link href="/dashboard" className="text-white/70 hover:text-white transition-colors">
-              Words
-            </Link>
-            <Link href="/study" className="text-white/70 hover:text-white transition-colors">
-              Study
-            </Link>
-            <Link href="/settings" className="text-white/70 hover:text-white transition-colors">
-              Settings
-            </Link>
-          </>
-
+        <nav className="flex items-center gap-24 text-sm">
+          {navLink('/dashboard', 'Words')}
+          {navLink('/study', 'Study')}
+          {navLink('/settings', 'Settings')}
           {!loading && user && (
             <button
               onClick={() => signOut()}
@@ -39,6 +43,8 @@ export default function Header() {
             </button>
           )}
         </nav>
+
+        <div className="hidden sm:block w-18" />
       </div>
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
     </header>
