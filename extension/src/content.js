@@ -9,6 +9,8 @@
 
 (function () {
   'use strict';
+  /* global chrome */
+  const browser = globalThis.browser ?? globalThis.chrome;
 
   const CHANNEL = 'hpf-main-isolated';
   const LOG = (...a) => console.log('[HPF]', ...a);
@@ -143,7 +145,7 @@
     if (s.zhColor !== null && s.track1Color === DEFAULTS.track1Color) { s.track1Color = s.zhColor; migrate.track1Color = s.zhColor; }
     if (s.enColor !== null && s.track2Color === DEFAULTS.track2Color) { s.track2Color = s.enColor; migrate.track2Color = s.enColor; }
     if (Object.keys(migrate).length) browser.storage.local.set(migrate);
-    cfg = s;
+    cfg = { ...s, track1: DEFAULTS.track1, track2: DEFAULTS.track2 };
     LOG('cfg:', JSON.stringify(cfg));
     applyStyle();
     for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
@@ -152,24 +154,17 @@
 
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    let trackChanged = false;
     for (const key of Object.keys(DEFAULTS)) {
       if (key in changes) {
-        // Don't let other tabs' track/mode changes bleed into this tab
-        if (document.hidden && (key === 'track1' || key === 'track2' || key === 'learnMode')) continue;
+        if (key === 'track1' || key === 'track2') continue; // per-tab; changed only via set-track message
         cfg[key] = changes[key].newValue;
       }
     }
-    if (!document.hidden && ('track1' in changes || 'track2' in changes)) {
-      cues.top = []; cues.bottom = [];
-      trackChanged = true;
-    }
-    if (!document.hidden && 'learnMode' in changes) {
+    if ('learnMode' in changes) {
       lastTop = ''; lastBottom = '';
       if (changes.learnMode.newValue === 'ja') { loadKuromoji(); loadJaDict(); }
     }
     applyStyle();
-    if (trackChanged && lastTrackUrls) fetchSubtitles(lastTrackUrls);
 
     if ('savedWords' in changes) {
       const oldKeys = new Set(Object.keys(changes.savedWords.oldValue || {}));
@@ -256,7 +251,7 @@
     if (hpfDict || dictLoading) return;
     dictLoading = true;
     try {
-      const resp = await fetch(browser.runtime.getURL('cedict.json'));
+      const resp = await fetch(browser.runtime.getURL('vendor/cedict.json'));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       hpfDict = await resp.json();
       LOG('dict loaded:', Object.keys(hpfDict).length, 'entries');
@@ -339,7 +334,7 @@
     if (jaDict || jaDictLoading) return;
     jaDictLoading = true;
     try {
-      const resp = await fetch(browser.runtime.getURL('ja-dict.json'));
+      const resp = await fetch(browser.runtime.getURL('vendor/ja-dict.json'));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       jaDict = await resp.json();
       LOG('jaDict loaded:', Object.keys(jaDict).length, 'entries');
@@ -367,11 +362,11 @@
       const escapedBase = escapeHtml(baseForm);
       if (hasKanji(surface) && reading) {
         const hi = escapeHtml(toHiragana(reading));
-        const rt = cfg.pinyinEnabled ? `<rt>${hi}</rt>` : '';
-        return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}${rt}</ruby></span>`;
+        const rtStyle = cfg.pinyinEnabled ? '' : 'visibility:hidden';
+        return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
       }
-      return cfg.pinyinEnabled && hasKanji(text) ?
-        `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt/></ruby></span>` :
+      return hasKanji(text) ?
+        `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? '' : 'visibility:hidden'}"/></ruby></span>` :
         `<span class="dusub-word" data-base="${escapedBase}">${escapedSurface}</span>`;
     }).join('');
   }
@@ -562,16 +557,16 @@
       }
 
       if (!hpfDict) { loadDict(); return; }
-      const ruby = /** @type {Element} */ (e.target).closest('ruby[data-idx]');
-      if (!ruby) return;
-      const idx = parseInt(/** @type {HTMLElement} */(ruby).dataset.idx, 10);
+      const charEl = /** @type {Element} */ (e.target).closest('[data-idx]');
+      if (!charEl) return;
+      const idx = parseInt(/** @type {HTMLElement} */(charEl).dataset.idx, 10);
       const result = lookupWord(getLastText(), idx);
       if (!result) return;
       const wordLen = [...result.word].length;
-      const rubyEls = [...box.querySelectorAll('ruby[data-idx]')]
+      const charEls = [...box.querySelectorAll('[data-idx]')]
         .filter(r => { const ri = parseInt(/** @type {HTMLElement} */(r).dataset.idx, 10); return ri >= idx && ri < idx + wordLen; });
-      const ctxPinyin = rubyEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
-      showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, ruby);
+      const ctxPinyin = charEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
+      showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, charEl);
     });
     box.addEventListener('mouseleave', startFade);
   }
@@ -585,6 +580,7 @@
   let lastTrackUrls = null;
   /** @type {{ languageCode: string, name: string }[]} */
   let localTracks = [];
+  let trackManuallySet = false;
 
   window.addEventListener(CHANNEL, (e) => {
     if (document.hidden) return;
@@ -596,6 +592,11 @@
     localTracks = tracks.map(t => ({ languageCode: t.code, name: t.name }));
     browser.storage.local.set({ availableTracks: localTracks }).catch(() => { });
     lastTrackUrls = Object.fromEntries(tracks.map(t => [t.code, t.url]));
+    if (!trackManuallySet) {
+      const tlist = /** @type {{ code: string }[]} */ (tracks);
+      if (!cfg.track1) cfg.track1 = tlist.find(t => t.code.startsWith('zh'))?.code || tlist.find(t => t.code.startsWith('ja'))?.code || '';
+      if (!cfg.track2) cfg.track2 = tlist.find(t => t.code.startsWith('en'))?.code || '';
+    }
     fetchSubtitles(lastTrackUrls);
   });
 
@@ -631,6 +632,20 @@
     }
     if (msg.type === 'get-tab-config') {
       sendResponse({ track1: cfg.track1, track2: cfg.track2, learnMode: cfg.learnMode, availableTracks: localTracks });
+      return true;
+    }
+    if (msg.type === 'set-track') {
+      const t1 = msg.track1 ?? cfg.track1;
+      const t2 = msg.track2 ?? cfg.track2;
+      const changed = t1 !== cfg.track1 || t2 !== cfg.track2;
+      cfg.track1 = t1; cfg.track2 = t2;
+      trackManuallySet = true;
+      if (changed) {
+        cues.top = []; cues.bottom = [];
+        lastTop = ''; lastBottom = '';
+        if (lastTrackUrls) fetchSubtitles(lastTrackUrls);
+      }
+      sendResponse({ ok: true });
       return true;
     }
   });
@@ -718,8 +733,8 @@
       if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
         const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
         correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
-        const rt = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `<rt style="color:${rtColor}">${py}</rt>` : '';
-        return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}${rt}</ruby>`;
+        const rtStyle = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `color:${rtColor}` : 'visibility:hidden';
+        return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}<rt style="${rtStyle}">${py}</rt></ruby>`;
       }
       return escaped;
     }).join('');

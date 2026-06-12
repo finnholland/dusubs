@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useReducer } from 'react';
 import { DocumentSnapshot } from 'firebase/firestore';
 import { useUser } from '../../lib/auth';
 import { getWords, deleteWord, exportWords } from '../../lib/words';
@@ -9,51 +9,66 @@ import LanguageFilter from '../../components/LanguageFilter';
 import { SavedWord } from '../../types';
 import SignInModal from '../../components/SignInModal';
 
+type ListState = {
+  words: SavedWord[];
+  lastDoc: DocumentSnapshot | null;
+  hasMore: boolean;
+  fetching: boolean;
+  source: 'firebase' | 'extension' | 'none';
+};
+
+type ListAction =
+  | { type: 'fetch_start' }
+  | { type: 'fetch_done'; words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'none'; append: boolean }
+  | { type: 'delete'; id: string };
+
+const initialList: ListState = { words: [], lastDoc: null, hasMore: true, fetching: false, source: 'none' };
+
+function listReducer(state: ListState, action: ListAction): ListState {
+  switch (action.type) {
+    case 'fetch_start':
+      return { ...state, fetching: true };
+    case 'fetch_done':
+      return {
+        words: action.append ? [...state.words, ...action.words] : action.words,
+        lastDoc: action.lastDoc,
+        hasMore: action.words.length === 50,
+        fetching: false,
+        source: action.source,
+      };
+    case 'delete':
+      return { ...state, words: state.words.filter((w) => w.id !== action.id) };
+  }
+}
 
 export default function DashboardPage() {
   const { user, loading } = useUser();
-
-  const [words, setWords] = useState<SavedWord[]>([]);
   const [language, setLanguage] = useState<SavedWord['language'] | 'all'>('all');
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
-  const [fetching, setFetching] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [source, setSource] = useState<'firebase' | 'extension' | 'none'>('none');
   const [showSignIn, setShowSignIn] = useState(false);
+  const [list, dispatch] = useReducer(listReducer, initialList);
 
   const load = useCallback(
-    async (reset = false) => {
-      setFetching(true);
+    async (after: DocumentSnapshot | null) => {
+      dispatch({ type: 'fetch_start' });
       const lang = language === 'all' ? undefined : language;
-      const result = await getWords(user?.uid ?? null, {
-        language: lang,
-        after: reset ? undefined : lastDoc ?? undefined,
-      });
-      setWords((prev) => (reset ? result.words : [...prev, ...result.words]));
-      setLastDoc(result.lastDoc);
-      setHasMore(result.words.length === 50);
-      setSource(result.source);
-      setFetching(false);
+      const result = await getWords(user?.uid ?? null, { language: lang, after: after ?? undefined });
+      dispatch({ type: 'fetch_done', words: result.words, lastDoc: result.lastDoc, source: result.source, append: after !== null });
     },
-    [user, language, lastDoc]
+    [user, language]
   );
 
   useEffect(() => {
     if (loading) return;
-    setWords([]);
-    setLastDoc(null);
-    setHasMore(true);
-    load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, language, loading]);
+    load(null);
+  }, [user, language, loading, load]);
 
   const handleDelete = async (id: string, key?: string) => {
     await deleteWord(user?.uid ?? null, id, key);
-    setWords((prev) => prev.filter((w) => w.id !== id));
+    dispatch({ type: 'delete', id });
   };
 
   const handleExport = (format: 'anki' | 'quizlet') => {
-    const text = exportWords(words, format);
+    const text = exportWords(list.words, format);
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -87,7 +102,7 @@ export default function DashboardPage() {
 
       <LanguageFilter value={language} onChange={setLanguage} />
 
-      {source === 'extension' && (
+      {list.source === 'extension' && (
         <p className="text-white/50 text-sm text-center border border-white/10 rounded-xl py-3 px-4">
           Showing words from the extension.{' '}
           <button
@@ -97,27 +112,27 @@ export default function DashboardPage() {
         </p>
       )}
 
-      {words.length === 0 && !fetching && (
+      {list.words.length === 0 && !list.fetching && (
         <p className="text-white/40 text-sm py-12 text-center">
-          {source === 'none'
+          {list.source === 'none'
             ? 'Install the extension and start watching to save words.'
             : 'No words saved yet. Start watching to save words!'}
         </p>
       )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {words.map((w) => (
+        {list.words.map((w) => (
           <WordCard key={w.id} word={w} onDelete={handleDelete} showLanguage={language === 'all'} />
         ))}
       </div>
 
-      {hasMore && (
+      {list.hasMore && (
         <button
-          onClick={() => load()}
-          disabled={fetching}
+          onClick={() => load(list.lastDoc)}
+          disabled={list.fetching}
           className="mx-auto border border-white/20 text-white/60 px-8 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
         >
-          {fetching ? 'Loading…' : 'Load more'}
+          {list.fetching ? 'Loading…' : 'Load more'}
         </button>
       )}
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}

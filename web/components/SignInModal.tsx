@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export default function SignInModal({ onClose }: { onClose: () => void }) {
-  const [mounted, setMounted] = useState(false);
+const [mounted] = useState(() => typeof window !== 'undefined');
 
   useEffect(() => {
-    setMounted(true);
     const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

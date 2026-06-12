@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" alt="Dusubs logo" width="96" />
+  <img src="../extension/assets/icon.png" alt="Dusubs logo" width="96" />
 </p>
 
 <h1 align="center">Dusubs</h1>

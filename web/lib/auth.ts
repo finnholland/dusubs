@@ -13,6 +13,7 @@ export async function signIn() {}
 export async function signOut() {}
 
 export async function getSyncToken(_uid: string): Promise<string> {
+  console.log(_uid)
   return 'dev-sync-token';
 }
 

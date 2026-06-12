@@ -9,5 +9,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["popup.tsx"]
+  "include": ["extension/src/popup.tsx"]
 }

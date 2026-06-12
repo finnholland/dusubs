@@ -1,0 +1,100 @@
+{
+  "manifest_version": 3,
+  "name": "Dusubs",
+  "version": "1.0",
+  "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://www.dusubs.com/*",
+    "*://*.youtube.com/*",
+    "*://*.bilibili.com/*",
+    "*://*.bilivideo.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "world": "MAIN",
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "src/youtube-main.js"
+      ]
+    },
+    {
+      "world": "MAIN",
+      "matches": [
+        "https://www.bilibili.com/*"
+      ],
+      "js": [
+        "src/bilibili-main.js"
+      ]
+    },
+    {
+      "world": "ISOLATED",
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.bilibili.com/*"
+      ],
+      "js": [
+        "vendor/pinyin-pro.js",
+        "vendor/kuromoji.js",
+        "src/content.js"
+      ]
+    },
+    {
+      "world": "ISOLATED",
+      "matches": [
+        "http://localhost/*",
+        "https://www.dusubs.com/*"
+      ],
+      "js": [
+        "src/web-bridge.js"
+      ]
+    }
+  ],
+  "icons": {
+    "512": "assets/icon.png"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "Hanzi Pinyin Subtitles",
+    "default_icon": {
+      "512": "assets/icon.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vendor/cedict.json",
+        "vendor/ja-dict.json",
+        "dict/base.dat.gz",
+        "dict/check.dat.gz",
+        "dict/tid.dat.gz",
+        "dict/tid_pos.dat.gz",
+        "dict/tid_map.dat.gz",
+        "dict/unk.dat.gz",
+        "dict/unk_pos.dat.gz",
+        "dict/unk_map.dat.gz",
+        "dict/unk_char.dat.gz",
+        "dict/unk_compat.dat.gz",
+        "dict/unk_invoke.dat.gz",
+        "dict/cc.dat.gz"
+      ],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.bilibili.com/*"
+      ]
+    }
+  ]
+}
