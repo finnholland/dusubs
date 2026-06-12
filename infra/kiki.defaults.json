@@ -10,5 +10,16 @@
   "routing": {
     "domainName": "dusubs.com",
     "hostedZoneId": "Z03178892VAM71VS4Q2Y0"
+  },
+  "staticHosting": {
+    "appName": "dusubs",
+    "domainName": "dusubs.com",
+    "subDomainName": "www",
+    "indexable": true,
+    "disableCSP": true,
+    "hostedZoneId": "Z03178892VAM71VS4Q2Y0",
+    "envs": [
+      "prod"
+    ]
   }
 }

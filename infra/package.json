@@ -1,0 +1,7 @@
+{
+  "name": "kiki-cdk-workspace",
+  "private": true,
+  "workspaces": [
+    "cdk-*"
+  ]
+}
