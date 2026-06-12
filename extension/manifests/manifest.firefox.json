@@ -63,6 +63,15 @@
       ]
     }
   ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "dusubs@dusubs.com",
+      "data_collection_permissions": {
+        "required": [],
+        "optional": []
+      }
+    }
+  },
   "icons": {
     "512": "assets/icon.png"
   },

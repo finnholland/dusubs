@@ -42,16 +42,18 @@ jobs:
       - name: Install web-ext
         run: npm install -g web-ext
 
-      - name: Sign Firefox extension (via AMO)
+      - name: Sign Firefox extension (via AMO API)
+        env:
+          AMO_API_KEY: ${{ vars.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
         run: |
           cp extension/manifests/manifest.firefox.json extension/manifest.json
-          web-ext sign \
+          web-ext build \
             --source-dir extension \
             --artifacts-dir ./artifacts-firefox \
-            --channel listed \
-            --ignore-files manifests/manifest.chrome.json manifests/manifest.firefox.json manifests/manifest.json \
-            --api-key ${{ vars.AMO_API_KEY }} \
-            --api-secret ${{ secrets.AMO_API_SECRET }}
+            --filename dusubs-firefox.xpi \
+            --ignore-files manifests/manifest.chrome.json manifests/manifest.firefox.json manifests/manifest.json
+          node scripts/amo-sign.js
 
       - name: Build Chrome extension (MV3)
         run: |
