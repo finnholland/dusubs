@@ -33,7 +33,7 @@ jobs:
           curl -fsSL "$url" | tar -xz
           mv jmdict-eng*.json scripts/jmdict-english.json
 
-      - name: "Install dependencies (postinstall generates cedict.json + ja-dict.json)"
+      - name: "Install dependencies (postinstall generates cedict.json.gz + ja-dict.json.gz)"
         run: npm ci
 
       - name: Build extension

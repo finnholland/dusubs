@@ -251,9 +251,9 @@
     if (hpfDict || dictLoading) return;
     dictLoading = true;
     try {
-      const resp = await fetch(browser.runtime.getURL('vendor/cedict.json'));
+      const resp = await fetch(browser.runtime.getURL('vendor/cedict.json.gz'));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      hpfDict = await resp.json();
+      hpfDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
       LOG('dict loaded:', Object.keys(hpfDict).length, 'entries');
     } catch (e) {
       LOG('dict load failed:', e);
@@ -334,9 +334,9 @@
     if (jaDict || jaDictLoading) return;
     jaDictLoading = true;
     try {
-      const resp = await fetch(browser.runtime.getURL('vendor/ja-dict.json'));
+      const resp = await fetch(browser.runtime.getURL('vendor/ja-dict.json.gz'));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      jaDict = await resp.json();
+      jaDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
       LOG('jaDict loaded:', Object.keys(jaDict).length, 'entries');
     } catch (e) {
       LOG('jaDict load failed:', e);
@@ -491,14 +491,27 @@
     clearTimeout(fadeTimer);
     fadeTimer = undefined;
     const alreadySaved = savedZh.has(result.word);
-    tooltip.innerHTML =
-      `<div class="hpf-tip-word" style="color:${cfg.track1Color}">${escapeHtml(result.word)}</div>` +
-      `<div class="hpf-tip-pinyin">${escapeHtml(result.pinyin)}</div>` +
-      `<div class="hpf-tip-defs">${escapeHtml(trimDefinition(result.defs))}</div>` +
-      `<button class="hpf-tip-save${alreadySaved ? ' saved' : ''}">${alreadySaved ? 'Saved ✓' : 'Save word'}</button>`;
-    const saveBtn = tooltip.querySelector('.hpf-tip-save');
-    if (saveBtn) saveBtn.addEventListener('click', () =>
+
+    const wordDiv = document.createElement('div');
+    wordDiv.className = 'hpf-tip-word';
+    wordDiv.style.color = cfg.track1Color;
+    wordDiv.textContent = result.word;
+
+    const pinyinDiv = document.createElement('div');
+    pinyinDiv.className = 'hpf-tip-pinyin';
+    pinyinDiv.textContent = result.pinyin;
+
+    const defsDiv = document.createElement('div');
+    defsDiv.className = 'hpf-tip-defs';
+    defsDiv.textContent = trimDefinition(result.defs);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'hpf-tip-save' + (alreadySaved ? ' saved' : '');
+    saveBtn.textContent = alreadySaved ? 'Saved ✓' : 'Save word';
+    saveBtn.addEventListener('click', () =>
       savedZh.has(result.word) ? unsaveWord(result) : saveWord(result));
+
+    tooltip.replaceChildren(wordDiv, pinyinDiv, defsDiv, saveBtn);
     tooltip.classList.add('hpf-tip-visible');
     positionTooltip(anchor);
   }
@@ -706,6 +719,12 @@
   }
 
   // ── Ruby rendering ─────────────────────────────────────────────────────────
+  /** @param {Element} el @param {string} html */
+  function setHTML(el, html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    el.replaceChildren(...doc.body.childNodes);
+  }
+
   /** @param {string} s @returns {string} */
   function escapeHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -799,14 +818,14 @@
 
     if (top !== lastTop || showPinyinChanged || toneSandhiChanged) {
       lastTop = top;
-      if (topLang === 'zh' && cfg.learnMode === 'zh') topBox.innerHTML = renderRuby(top);
-      else if (topLang === 'ja' && cfg.learnMode === 'ja') topBox.innerHTML = renderJapanese(top);
+      if (topLang === 'zh' && cfg.learnMode === 'zh') setHTML(topBox, renderRuby(top));
+      else if (topLang === 'ja' && cfg.learnMode === 'ja') setHTML(topBox, renderJapanese(top));
       else topBox.textContent = top;
     }
     if (bottom !== lastBottom || showPinyinChanged || toneSandhiChanged) {
       lastBottom = bottom;
-      if (bottomLang === 'zh' && cfg.learnMode === 'zh') bottomBox.innerHTML = renderRuby(bottom);
-      else if (bottomLang === 'ja' && cfg.learnMode === 'ja') bottomBox.innerHTML = renderJapanese(bottom);
+      if (bottomLang === 'zh' && cfg.learnMode === 'zh') setHTML(bottomBox, renderRuby(bottom));
+      else if (bottomLang === 'ja' && cfg.learnMode === 'ja') setHTML(bottomBox, renderJapanese(bottom));
       else bottomBox.textContent = bottom;
     }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dusubs",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
   "permissions": [
     "activeTab",
@@ -75,8 +75,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "vendor/cedict.json",
-        "vendor/ja-dict.json",
+        "vendor/cedict.json.gz",
+        "vendor/ja-dict.json.gz",
         "dict/base.dat.gz",
         "dict/check.dat.gz",
         "dict/tid.dat.gz",

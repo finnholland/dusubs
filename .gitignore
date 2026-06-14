@@ -1,4 +1,5 @@
 cedict.json
+cedict.json.gz
 node_modules/
 popup.bundle.js
 popup.bundle.css
@@ -7,6 +8,7 @@ web/.next
 /web/dist
 dict/
 ja-dict.json
+ja-dict.json.gz
 scripts/jmdict-english.json
 artifacts-chrome/dusubs-chrome.zip
 
@@ -14,3 +16,4 @@ artifacts-chrome/dusubs-chrome.zip
 kiki.defaults.*.json
 # kiki — regenerated CDK app directories
 cdk-*/
+/artifacts-*
