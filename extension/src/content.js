@@ -483,7 +483,12 @@
 
   function trimDefinition(en) {
     const shortDef = en.split(';').slice(0, 4).join(';')
-    return shortDef.replace(/\[.*?\]\s*/g, '').replace(/\(.*?\)\s*/g, '').replace(/;{2,}/g, ';').replace(/;\s*$/, '').trim()
+    const stripped = shortDef.replace(/\[.*?\]\s*/g, '').replace(/\(.*?\)\s*/g, '').replace(/;{2,}/g, ';').replace(/;\s*$/, '').trim()
+    if (stripped === ';') {
+      const parenGroups = shortDef.match(/\(.*?\)/g) || []
+      return parenGroups.slice(0, 2).join('; ')
+    }
+    return stripped
   }
 
   /** @param {{ word: string, pinyin: string, defs: string }} result @param {Element} [anchor] */
