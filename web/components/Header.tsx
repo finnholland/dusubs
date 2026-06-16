@@ -26,7 +26,7 @@ export default function Header() {
   return (
     <header className="bg-black/20 backdrop-blur sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="hidden sm:block text-yellow-400 font-bold text-lg tracking-tight">
+        <Link href="/" title='v1.0' className="hidden sm:block text-yellow-400 font-bold text-lg tracking-tight">
           DuSubs
         </Link>
 
