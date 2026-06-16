@@ -100,27 +100,7 @@ async function main() {
     process.exit(1);
   }
   const versionData = await versionResp.json();
-  console.log(`Version ${versionData.version} created — polling for signing...`);
-
-  // Step 4: poll for signed file
-  for (let i = 0; i < 24; i++) {
-    await new Promise(r => setTimeout(r, 5000));
-    const resp = await fetch(
-      `https://addons.mozilla.org/api/v5/addons/addon/${addonId}/versions/${encodeURIComponent(version)}/`,
-      { headers: { Authorization: `JWT ${makeJWT()}` } }
-    );
-    const data = await resp.json();
-    const file = data.files?.[0];
-    console.log(`  [${i + 1}/24] status=${file?.status ?? 'pending'}`);
-    if (file?.status === 'public' && file?.download_url) {
-      const dlResp = await fetch(file.download_url, { headers: { Authorization: `JWT ${makeJWT()}` } });
-      fs.writeFileSync(xpiPath, Buffer.from(await dlResp.arrayBuffer()));
-      console.log(`Signed XPI saved: ${xpiPath}`);
-      return;
-    }
-  }
-  console.error('Timed out waiting for signing');
-  process.exit(1);
+  console.log(`Version ${versionData.version} submitted for review.`);
 }
 
 main();
