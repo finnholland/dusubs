@@ -12,6 +12,9 @@ type ExtWord = {
   sentKey?: string;  // legacy
   sentEn?: string;
   url: string;
+  leitnerBox?: number;
+  lastReviewed?: number | null;
+  nextReview?: number | null;
 };
 
 function toSavedWord(w: ExtWord): SavedWord {
@@ -30,6 +33,9 @@ function toSavedWord(w: ExtWord): SavedWord {
     url: w.url,
     ts: 0,
     savedAt: 0,
+    leitnerBox: (w.leitnerBox as SavedWord['leitnerBox']) ?? 1,
+    lastReviewed: w.lastReviewed ?? null,
+    nextReview: w.nextReview ?? null,
   };
 }
 
@@ -64,4 +70,8 @@ export function deleteWordFromExtension(key: string): void {
 
 export function deleteAllWordsFromExtension(): void {
   window.postMessage({ type: 'DUSUBS_DELETE_ALL_WORDS' }, '*');
+}
+
+export function updateWordInExtension(key: string, patch: Partial<Pick<SavedWord, 'leitnerBox' | 'lastReviewed' | 'nextReview'>>): void {
+  window.postMessage({ type: 'DUSUBS_UPDATE_WORD', key, patch }, '*');
 }

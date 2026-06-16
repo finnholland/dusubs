@@ -11,9 +11,9 @@ export interface SavedWord {
   url: string;       // youtube url with timestamp
   ts: number;        // video timestamp seconds
   savedAt: number;   // unix ms
-  nextReview?: number;
-  interval?: number;
-  ease?: number;
+  leitnerBox: 1 | 2 | 3 | 4 | 5;
+  lastReviewed: number | null;  // unix ms, null = never reviewed
+  nextReview: number | null;    // unix ms, null = not yet scheduled
 }
 
 export interface SyncToken {

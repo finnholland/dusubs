@@ -22,7 +22,21 @@ window.addEventListener('message', async (e) => {
     const wordKey = word?.zh ?? word?.ja ?? word?.key;
     if (!wordKey) return;
     const { savedWords } = await browser.storage.local.get({ savedWords: {} });
-    savedWords[wordKey] = word;
+    savedWords[wordKey] = {
+      ...word,
+      leitnerBox: word.leitnerBox ?? 1,
+      lastReviewed: word.lastReviewed ?? null,
+      nextReview: word.nextReview ?? null,
+    };
+    await browser.storage.local.set({ savedWords });
+  }
+
+  if (e.data.type === 'DUSUBS_UPDATE_WORD') {
+    const { key, patch } = e.data;
+    if (!key || !patch) return;
+    const { savedWords } = await browser.storage.local.get({ savedWords: {} });
+    if (!savedWords[key]) return;
+    savedWords[key] = { ...savedWords[key], ...patch };
     await browser.storage.local.set({ savedWords });
   }
 

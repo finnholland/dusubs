@@ -5,9 +5,8 @@ import { useUser } from '../../lib/auth';
 import { getWords } from '../../lib/words';
 import FlashCard from '../../components/FlashCard';
 import { SavedWord } from '../../types';
-import {
-  demote, filterDue, LeitnerProgress, loadProgress, nextDueDate, promote, saveProgress,
-} from '../../lib/leitner';
+import { demoteWord, filterDue, formatDueDate, nextDueDate, promoteWord } from '../../lib/leitner';
+import { updateWordInExtension } from '../../lib/extension';
 
 const STUDY_LANGS: { value: SavedWord['language'] | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -34,21 +33,11 @@ function LangSwitcher({ value, onChange }: { value: SavedWord['language'] | 'all
   );
 }
 
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-}
-
 type Status = 'loading' | 'selecting' | 'empty' | 'empty-lang' | 'caught-up' | 'studying' | 'done';
 type SelectionMode = 'review' | 'freestyle';
 
 export default function StudyPage() {
   const { user, loading } = useUser();
-  const progressRef = useRef<LeitnerProgress>({});
   const requeuedRef = useRef<Set<string>>(new Set());
   const studyLangRef = useRef<SavedWord['language'] | 'all'>('all');
 
@@ -72,12 +61,9 @@ export default function StudyPage() {
     requeuedRef.current = new Set();
     const forLang = wordsForLang(words);
     if (forLang.length === 0) { setStatus(studyLangRef.current === 'all' ? 'empty' : 'empty-lang'); return; }
-    const today = todayStr();
-    const progress = loadProgress();
-    progressRef.current = progress;
-    const due = [...filterDue(forLang, progress, today)].sort(() => Math.random() - 0.5);
+    const due = [...filterDue(forLang)].sort(() => Math.random() - 0.5);
     if (due.length === 0) {
-      setNextDue(nextDueDate(progress));
+      setNextDue(nextDueDate(forLang));
       setStatus('caught-up');
     } else {
       setQueue(due);
@@ -111,17 +97,16 @@ export default function StudyPage() {
       setAllWords(words);
       setStatus(words.length === 0 ? 'empty' : 'selecting');
     });
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const advance = (known: boolean) => {
-    const today = todayStr();
     const word = queue[index];
-    const progress = progressRef.current;
 
     if (known) {
       if (!isFreestyle && !requeuedRef.current.has(word.id)) {
-        progress[word.id] = promote(progress[word.id], today);
-        saveProgress(progress);
+        const patch = promoteWord(word);
+        updateWordInExtension(word.id, patch);
+        setQueue((q) => q.map((w, i) => (i === index ? { ...w, ...patch } : w)));
       }
       if (!requeuedRef.current.has(word.id)) {
         setResults((r) => ({ ...r, known: r.known + 1 }));
@@ -133,8 +118,9 @@ export default function StudyPage() {
       }
     } else {
       if (!isFreestyle) {
-        progress[word.id] = demote(today);
-        saveProgress(progress);
+        const patch = demoteWord();
+        updateWordInExtension(word.id, patch);
+        setQueue((q) => q.map((w, i) => (i === index ? { ...w, ...patch } : w)));
       }
       if (!requeuedRef.current.has(word.id)) {
         requeuedRef.current.add(word.id);
@@ -156,9 +142,9 @@ export default function StudyPage() {
   }
 
   if (status === 'selecting') {
-    const progress = loadProgress();
-    const today = todayStr();
-    const allDueCount = [...filterDue(allWords, progress, today)].length;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const allDueCount = filterDue(allWords).length;
 
     return (
       <div className="max-w-lg mx-auto px-4 py-12 flex flex-col gap-6">
@@ -195,7 +181,7 @@ export default function StudyPage() {
             const words = lang.value === 'all'
               ? allWords
               : allWords.filter((w) => w.language === lang.value);
-            const dueCount = [...filterDue(words, progress, today)].length;
+            const dueCount = filterDue(words).length;
             const disabled = selectionMode === 'review' ? dueCount === 0 : words.length === 0;
 
             return (
@@ -258,7 +244,7 @@ export default function StudyPage() {
         <div className="flex flex-col items-center gap-6">
           <div className="relative w-full max-w-lg min-h-48 border border-white/10 rounded-2xl p-8 bg-white/5 text-center flex flex-col items-center justify-center gap-2 text-white/60">
             All caught up
-            {nextDue && <span className="text-sm">Next review {formatDate(nextDue)}</span>}
+            {nextDue && <span className="text-sm">Next review {formatDueDate(nextDue)}</span>}
           </div>
           <button
             onClick={() => startFreestyle(allWords)}
