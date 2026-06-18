@@ -9,6 +9,7 @@
     "storage",
     "webRequest",
     "https://www.dusubs.com/*",
+    "https://dusubs.com/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
     "*://*.bilivideo.com/*"
@@ -55,8 +56,8 @@
     {
       "world": "ISOLATED",
       "matches": [
-        "http://localhost/*",
-        "https://www.dusubs.com/*"
+        "https://www.dusubs.com/*",
+        "https://dusubs.com/*"
       ],
       "js": [
         "src/web-bridge.js"

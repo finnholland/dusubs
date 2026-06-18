@@ -600,6 +600,14 @@
   let localTracks = [];
   let trackManuallySet = false;
 
+  window.addEventListener('yt-navigate-start', () => {
+    cues.top = []; cues.bottom = [];
+    lastTop = ''; lastBottom = '';
+    topBox.textContent = ''; bottomBox.textContent = '';
+    lastTrackUrls = null;
+    if (!trackManuallySet) { cfg.track1 = ''; cfg.track2 = ''; }
+  });
+
   window.addEventListener(CHANNEL, (e) => {
     if (document.hidden) return;
     const { type, payload } = e.detail || {};
@@ -607,13 +615,16 @@
     const { videoId, tracks } = payload;
     LOG('tracks from main, videoId:', videoId, 'count:', tracks.length);
     cues.top = []; cues.bottom = [];
+    lastTop = ''; lastBottom = '';
+    topBox.textContent = ''; bottomBox.textContent = '';
     localTracks = tracks.map(t => ({ languageCode: t.code, name: t.name }));
     browser.storage.local.set({ availableTracks: localTracks }).catch(() => { });
     lastTrackUrls = Object.fromEntries(tracks.map(t => [t.code, t.url]));
     if (!trackManuallySet) {
       const tlist = /** @type {{ code: string }[]} */ (tracks);
-      if (!cfg.track1) cfg.track1 = tlist.find(t => t.code.startsWith('zh'))?.code || tlist.find(t => t.code.startsWith('ja'))?.code || '';
-      if (!cfg.track2) cfg.track2 = tlist.find(t => t.code.startsWith('en'))?.code || '';
+      const isReal = (/** @type {{ code: string }} */ t) => !t.code.includes('-x-ytbasr');
+      if (!cfg.track1) cfg.track1 = tlist.find(t => isReal(t) && t.code.startsWith('zh'))?.code || tlist.find(t => isReal(t) && t.code.startsWith('ja'))?.code || '';
+      if (!cfg.track2) cfg.track2 = tlist.find(t => isReal(t) && t.code.startsWith('en'))?.code || '';
     }
     fetchSubtitles(lastTrackUrls);
   });
@@ -669,6 +680,7 @@
   });
 
   document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { lastTop = ''; lastBottom = ''; topBox.textContent = ''; bottomBox.textContent = ''; }
     if (!document.hidden && lastTrackUrls && (cfg.track1 || cfg.track2) && !cues.top.length && !cues.bottom.length) {
       fetchSubtitles(lastTrackUrls);
     }
