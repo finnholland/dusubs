@@ -131,24 +131,41 @@ async function main() {
   const jmdict = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
   const out = Object.create(null);
 
+  // Pass 1: kana-only entries (particles, function words, plain-kana vocab).
+  // These go in first so particle に/を/は are not overwritten by noun homophones.
   for (const entry of jmdict.words) {
-    const defs = entry.sense
-      .slice(0, 3)
-      .flatMap(s => s.gloss.map(g => g.text))
-      .slice(0, 3);
-
+    if (entry.kanji.length > 0) continue;
+    const defs = entry.sense.slice(0, 3).flatMap(s => s.gloss.map(g => g.text)).slice(0, 3);
     if (!defs.length) continue;
+    const pos = entry.sense[0]?.partOfSpeech?.[0] ?? '';
+    for (const k of entry.kana) {
+      if (k.common && !out[k.text]) {
+        out[k.text] = { rd: k.text, rm: toRomaji(k.text), en: defs, pos };
+      }
+    }
+  }
 
+  // Pass 2: entries with kanji forms.
+  for (const entry of jmdict.words) {
+    if (entry.kanji.length === 0) continue;
+    const defs = entry.sense.slice(0, 3).flatMap(s => s.gloss.map(g => g.text)).slice(0, 3);
+    if (!defs.length) continue;
     const pos = entry.sense[0]?.partOfSpeech?.[0] ?? '';
 
     for (const k of entry.kanji) {
+      if (!k.common) continue;
       const rd = entry.kana[0]?.text ?? '';
-      out[k.text] = { rd, rm: toRomaji(rd), en: defs, pos };
+      if (!out[k.text]) out[k.text] = { rd, rm: toRomaji(rd), en: defs, pos };
     }
 
-    for (const k of entry.kana) {
-      if (!out[k.text]) {
-        out[k.text] = { rd: k.text, rm: toRomaji(k.text), en: defs, pos };
+    // Also index kana form when marked "uk" (usually written in kana) — e.g. ある,
+    // いる, くる. Kuromoji returns kana basic_form for these even though kanji exist.
+    const usuallyKana = entry.sense.some(s => s.misc?.includes('uk'));
+    if (usuallyKana) {
+      for (const k of entry.kana) {
+        if (k.common && !out[k.text]) {
+          out[k.text] = { rd: k.text, rm: toRomaji(k.text), en: defs, pos };
+        }
       }
     }
   }

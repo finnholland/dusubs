@@ -219,8 +219,15 @@
   }
   var jaDict = null;
   var jaDictLoading = false;
+  var jaRdIndex = (
+    /** @type {Record<string, { rd: string, en: string[], pos: string }> | null} */
+    null
+  );
   function getJaDict() {
     return jaDict;
+  }
+  function getJaRdIndex() {
+    return jaRdIndex;
   }
   async function loadKuromoji() {
     if (kuromoji || kuromojiLoading) return;
@@ -274,6 +281,13 @@
       const resp = await fetch(browser.runtime.getURL("vendor/ja-dict.json.gz"));
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       jaDict = await new Response(resp.body.pipeThrough(new DecompressionStream("gzip"))).json();
+      jaRdIndex = {};
+      for (const [key, entry] of Object.entries(jaDict)) {
+        if (hasKanji(key) && !jaRdIndex[entry.rd]) jaRdIndex[entry.rd] = entry;
+      }
+      for (const [key, entry] of Object.entries(jaDict)) {
+        if (!hasKanji(key) && !jaRdIndex[entry.rd]) jaRdIndex[entry.rd] = entry;
+      }
       LOG("jaDict loaded:", Object.keys(jaDict).length, "entries");
     } catch (e) {
       LOG("jaDict load failed:", e);
@@ -299,14 +313,17 @@
       const surface = token.surface_form;
       const baseForm = token.basic_form && token.basic_form !== "*" ? token.basic_form : surface;
       const reading = token.reading;
+      const pos = token.pos ?? "";
       const escapedSurface = escapeHtmlLang(surface);
       const escapedBase = escapeHtmlLang(baseForm);
+      const escapedPos = escapeHtmlLang(pos);
       if (hasKanji(surface) && reading) {
         const hi = escapeHtmlLang(toHiragana(reading));
         const rtStyle = cfg.pinyinEnabled ? "" : "visibility:hidden";
-        return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
+        return `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
       }
-      return hasKanji(text) ? `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? "" : "visibility:hidden"}"/></ruby></span>` : `<span class="dusub-word" data-base="${escapedBase}">${escapedSurface}</span>`;
+      const rdAttr = reading ? ` data-rd="${escapeHtmlLang(toHiragana(reading))}"` : "";
+      return hasKanji(text) ? `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? "" : "visibility:hidden"}"/></ruby></span>` : `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}>${escapedSurface}</span>`;
     }).join("");
   }
   function escapeHtmlLang(s) {
@@ -667,17 +684,50 @@
           loadJaDict();
           return;
         }
-        const base = (
+        const el = (
           /** @type {HTMLElement} */
-          wordSpan.dataset.base
+          wordSpan
         );
-        const entry = jaDict2[base];
+        const base = el.dataset.base;
+        const pos = el.dataset.pos ?? "";
+        if (pos === "\u52A9\u8A5E" || pos === "\u52A9\u52D5\u8A5E") {
+          const GRAMMAR = (
+            /** @type {Record<string, [string, string]>} */
+            {
+              "\u306E": ["no", "particle \u2014 possession / noun modification / nominalizer"],
+              "\u306B": ["ni", "particle \u2014 location, time, direction, indirect object"],
+              "\u3092": ["wo", "particle \u2014 direct object"],
+              "\u306F": ["wa", "particle \u2014 topic marker"],
+              "\u304C": ["ga", "particle \u2014 subject marker"],
+              "\u3067": ["de", "particle \u2014 location of action, means, cause"],
+              "\u3068": ["to", "particle \u2014 and / with / quotation"],
+              "\u3082": ["mo", "particle \u2014 also / too / even"],
+              "\u3078": ["e", "particle \u2014 direction (toward)"],
+              "\u304B\u3089": ["kara", "particle \u2014 from / because"],
+              "\u307E\u3067": ["made", "particle \u2014 until / up to"],
+              "\u3088\u308A": ["yori", "particle \u2014 than / from"],
+              "\u304B": ["ka", "particle \u2014 question marker"],
+              "\u306D": ["ne", "particle \u2014 seeking agreement (right? / isn't it?)"],
+              "\u3088": ["yo", "particle \u2014 assertion / emphasis"],
+              "\u307E\u3059": ["masu", "auxiliary \u2014 polite verb ending"],
+              "\u3067\u3059": ["desu", "auxiliary \u2014 polite copula (is / am / are)"],
+              "\u305F": ["ta", "auxiliary \u2014 past tense"],
+              "\u3066": ["te", "auxiliary \u2014 te-form connector"],
+              "\u306A\u3044": ["nai", "auxiliary \u2014 negation"],
+              "\u3066\u3044\u308B": ["te iru", "auxiliary \u2014 ongoing action / resultant state"]
+            }
+          );
+          const [romaji2, defs2] = GRAMMAR[base] ?? ["", pos === "\u52A9\u52D5\u8A5E" ? "auxiliary verb ending" : "particle"];
+          showTooltip({ word: base, pinyin: romaji2, defs: defs2 }, el);
+          return;
+        }
+        const entry = jaDict2[base] ?? getJaRdIndex()?.[el.dataset.rd ?? ""];
         if (!entry) return;
         const defs = entry.en.join("; ");
-        const pos = entry.pos ? `[${entry.pos}] ` : "";
+        const entryPos = entry.pos ? `[${entry.pos}] ` : "";
         const romaji = entry.rm || "";
         const reading = hasKanji(base) ? [entry.rd, romaji].filter(Boolean).join("  ") : romaji || entry.rd;
-        showTooltip({ word: base, pinyin: reading, defs: pos + defs }, wordSpan);
+        showTooltip({ word: base, pinyin: reading, defs: entryPos + defs }, wordSpan);
         return;
       }
       if (!getHpfDict()) {

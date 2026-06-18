@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, savedZh, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
-import { loadDict, lookupWord, loadJaDict, getJaDict, getHpfDict, hasKanji } from './lang.js';
+import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji } from './lang.js';
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
@@ -108,16 +108,46 @@ export function attachHover(box, trackFn, getLastText) {
       if (!wordSpan) return;
       const jaDict = getJaDict();
       if (!jaDict) { loadJaDict(); return; }
-      const base = /** @type {HTMLElement} */ (wordSpan).dataset.base;
-      const entry = jaDict[base];
+      const el = /** @type {HTMLElement} */ (wordSpan);
+      const base = el.dataset.base;
+      const pos = el.dataset.pos ?? '';
+      if (pos === '助詞' || pos === '助動詞') {
+        const GRAMMAR = /** @type {Record<string, [string, string]>} */ ({
+          'の': ['no',  'particle — possession / noun modification / nominalizer'],
+          'に': ['ni',  'particle — location, time, direction, indirect object'],
+          'を': ['wo',  'particle — direct object'],
+          'は': ['wa',  'particle — topic marker'],
+          'が': ['ga',  'particle — subject marker'],
+          'で': ['de',  'particle — location of action, means, cause'],
+          'と': ['to',  'particle — and / with / if (conditional) / quotation'],
+          'も': ['mo',  'particle — also / too / even'],
+          'へ': ['e',   'particle — direction (toward)'],
+          'から': ['kara', 'particle — from / because'],
+          'まで': ['made', 'particle — until / up to'],
+          'より': ['yori', 'particle — than / from'],
+          'か': ['ka',  'particle — question marker'],
+          'ね': ['ne',  'particle — seeking agreement (right? / isn\'t it?)'],
+          'よ': ['yo',  'particle — assertion / emphasis'],
+          'ます': ['masu', 'auxiliary — polite verb ending'],
+          'です': ['desu', 'auxiliary — polite copula (is / am / are)'],
+          'た':  ['ta',  'auxiliary — past tense'],
+          'て':  ['te',  'auxiliary — te-form connector'],
+          'ない': ['nai', 'auxiliary — negation'],
+          'ている': ['te iru', 'auxiliary — ongoing action / resultant state'],
+        });
+        const [romaji, defs] = GRAMMAR[base] ?? ['', pos === '助動詞' ? 'auxiliary verb ending' : 'particle'];
+        showTooltip({ word: base, pinyin: romaji, defs }, el);
+        return;
+      }
+      const entry = jaDict[base] ?? getJaRdIndex()?.[el.dataset.rd ?? ''];
       if (!entry) return;
       const defs = entry.en.join('; ');
-      const pos = entry.pos ? `[${entry.pos}] ` : '';
+      const entryPos = entry.pos ? `[${entry.pos}] ` : '';
       const romaji = entry.rm || '';
       const reading = hasKanji(base)
         ? [entry.rd, romaji].filter(Boolean).join('  ')
         : romaji || entry.rd;
-      showTooltip({ word: base, pinyin: reading, defs: pos + defs }, wordSpan);
+      showTooltip({ word: base, pinyin: reading, defs: entryPos + defs }, wordSpan);
       return;
     }
 

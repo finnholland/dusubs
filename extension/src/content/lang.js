@@ -52,8 +52,11 @@ export function getKuromoji() { return kuromoji; }
 /** @type {Record<string, { rd: string, en: string[], pos: string }> | null} */
 let jaDict = null;
 let jaDictLoading = false;
+/** Reverse index: hiragana reading → best entry (first common noun/verb, not particle/aux) */
+let jaRdIndex = /** @type {Record<string, { rd: string, en: string[], pos: string }> | null} */ (null);
 
 export function getJaDict() { return jaDict; }
+export function getJaRdIndex() { return jaRdIndex; }
 
 export async function loadKuromoji() {
   if (kuromoji || kuromojiLoading) return;
@@ -97,6 +100,18 @@ export async function loadJaDict() {
     const resp = await fetch(browser.runtime.getURL('vendor/ja-dict.json.gz'));
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     jaDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    // Build reverse reading index: hiragana → entry, for when kuromoji returns
+    // kana basic_form (e.g. ほう for 方). Kanji-keyed entries win over kana-keyed
+    // entries since they're more specific (方 beats 報 for reading ほう).
+    jaRdIndex = {};
+    // Pass 1: kanji-keyed entries only
+    for (const [key, entry] of Object.entries(jaDict)) {
+      if (hasKanji(key) && !jaRdIndex[entry.rd]) jaRdIndex[entry.rd] = entry;
+    }
+    // Pass 2: kana-keyed entries fill gaps
+    for (const [key, entry] of Object.entries(jaDict)) {
+      if (!hasKanji(key) && !jaRdIndex[entry.rd]) jaRdIndex[entry.rd] = entry;
+    }
     LOG('jaDict loaded:', Object.keys(jaDict).length, 'entries');
   } catch (e) {
     LOG('jaDict load failed:', e);
@@ -128,16 +143,19 @@ export function renderJapanese(text) {
     const surface = token.surface_form;
     const baseForm = (token.basic_form && token.basic_form !== '*') ? token.basic_form : surface;
     const reading = token.reading;
+    const pos = token.pos ?? '';
     const escapedSurface = escapeHtmlLang(surface);
     const escapedBase = escapeHtmlLang(baseForm);
+    const escapedPos = escapeHtmlLang(pos);
     if (hasKanji(surface) && reading) {
       const hi = escapeHtmlLang(toHiragana(reading));
       const rtStyle = cfg.pinyinEnabled ? '' : 'visibility:hidden';
-      return `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
+      return `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
     }
+    const rdAttr = reading ? ` data-rd="${escapeHtmlLang(toHiragana(reading))}"` : '';
     return hasKanji(text) ?
-      `<span class="dusub-word" data-base="${escapedBase}"><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? '' : 'visibility:hidden'}"/></ruby></span>` :
-      `<span class="dusub-word" data-base="${escapedBase}">${escapedSurface}</span>`;
+      `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? '' : 'visibility:hidden'}"/></ruby></span>` :
+      `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}>${escapedSurface}</span>`;
   }).join('');
 }
 
