@@ -50,7 +50,7 @@
       "js": [
         "vendor/pinyin-pro.js",
         "vendor/kuromoji.js",
-        "src/content.js"
+        "src/content.bundle.js"
       ]
     },
     {
