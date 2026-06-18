@@ -28,7 +28,7 @@ function TrashIcon() {
 }
 
 export default function WordCard({ word, onDelete, showLanguage }: Props) {
-  const displayWord = word.zh ?? word.ja;
+  const displayWord = word.char ?? word.zh ?? word.ja;
   const displaySent = word.sentZh ?? word.sentJa;
 
   const timestampUrl = word.url.includes('t=')

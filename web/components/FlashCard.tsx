@@ -15,7 +15,7 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
   const [hintLevel, setHintLevel] = useState(0);
 
   const maxHints = freestyle ? 3 : 1;
-  const displayWord = word.zh ?? word.ja;
+  const displayWord = word.char ?? word.zh ?? word.ja;
   const displaySent = word.sentZh ?? word.sentJa;
 
   return (

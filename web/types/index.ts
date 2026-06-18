@@ -1,8 +1,9 @@
 export interface SavedWord {
   id: string;
   language: 'zh' | 'ja' | 'es' | 'en' | 'fr';
-  zh?: string;       // Chinese word
-  ja?: string;       // Japanese word
+  char?: string;     // word (language-agnostic)
+  zh?: string;       // Chinese word (legacy)
+  ja?: string;       // Japanese word (legacy)
   py?: string;       // pinyin (zh) or reading (ja)
   en: string;        // definition
   sentZh?: string;   // source sentence in Chinese

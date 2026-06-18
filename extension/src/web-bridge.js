@@ -19,7 +19,7 @@ window.addEventListener('message', async (e) => {
 
   if (e.data.type === 'DUSUBS_SAVE_WORD') {
     const word = e.data.word;
-    const wordKey = word?.zh ?? word?.ja ?? word?.key;
+    const wordKey = word?.char ?? word?.zh ?? word?.ja ?? word?.key;
     if (!wordKey) return;
     const { savedWords } = await browser.storage.local.get({ savedWords: {} });
     savedWords[wordKey] = {
@@ -41,7 +41,7 @@ window.addEventListener('message', async (e) => {
   }
 
   if (e.data.type === 'DUSUBS_DELETE_WORD') {
-    const key = e.data.key ?? e.data.zh;
+    const key = e.data.key ?? e.data.char ?? e.data.zh;
     if (!key) return;
     const { savedWords } = await browser.storage.local.get({ savedWords: {} });
     delete savedWords[key];

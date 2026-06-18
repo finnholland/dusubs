@@ -626,8 +626,7 @@
     const sep = location.href.includes("?") ? "&" : "?";
     const baseUrl = location.href.replace(/([&?])t=[^&]*/g, "").replace(/\?$/, "");
     const url = baseUrl + sep + "t=" + Math.floor(t);
-    const sentField = `sent${cfg.learnMode.charAt(0).toUpperCase()}${cfg.learnMode.slice(1)}`;
-    const entry = { [cfg.learnMode]: result.word, py: result.pinyin, en: trimDefinition(result.defs), [sentField]: renderState.lastTop, sentEn: renderState.lastBottom, url, language: cfg.learnMode, leitnerBox: 1, lastReviewed: null, nextReview: null };
+    const entry = { char: result.word, py: result.pinyin, en: trimDefinition(result.defs), sentNative: renderState.lastTop, sentEn: renderState.lastBottom, url, language: cfg.learnMode, leitnerBox: 1, lastReviewed: null, nextReview: null };
     browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
       savedWords[result.word] = entry;
       return browser.storage.local.set({ savedWords });

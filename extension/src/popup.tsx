@@ -24,7 +24,7 @@ const browser: {
 } = (globalThis as any).browser ?? (globalThis as any).chrome;
 
 interface Track { languageCode: string; name: string; }
-interface SavedWord { zh: string; py: string; en: string; url?: string; sentZh?: string; sentEn?: string; }
+interface SavedWord { char?: string; py: string; en: string; url?: string; language?: string; sentNative?: string; sentZh?: string; sentJa?: string; sentEn?: string; }
 interface Settings {
   fontScale: number; subPosition: number;
   track1: string; track2: string;
@@ -202,20 +202,22 @@ function App() {
     });
   }
 
-  function deleteWord(zh: string) {
+  function deleteWord(key: string) {
     const next = { ...words };
-    delete next[zh];
+    delete next[key];
     setWords(next);
     browser.storage.local.set({ savedWords: next });
   }
 
   function exportAnki() {
     const lines = Object.values(words).map(w => {
+      const word = w.char ?? '';
       let back = `${escHtml(w.py)}<br>${escHtml(w.en)}`;
-      if (w.sentEn || w.sentZh) {
-        back += `<br><i>${escHtml([w.sentZh, w.sentEn].filter(Boolean).join(' · '))}</i>`;
+      const sent = w.sentNative ?? w.sentZh ?? w.sentJa;
+      if (w.sentEn || sent) {
+        back += `<br><i>${escHtml([sent, w.sentEn].filter(Boolean).join(' · '))}</i>`;
       }
-      return `${w.zh}\t${back}`;
+      return `${word}\t${back}`;
     });
     downloadText(lines.join('\n'), 'saved-words-anki.txt');
     setExportOpen(false);
@@ -223,7 +225,7 @@ function App() {
 
   function exportQuizlet() {
     const lines = Object.values(words).map(w =>
-      `${w.zh}\t${w.py} · ${w.en}`
+      `${w.char ?? ''}\t${w.py} · ${w.en}`
     );
     downloadText(lines.join('\n'), 'saved-words-quizlet.txt');
     setExportOpen(false);
@@ -366,23 +368,26 @@ function App() {
         <div id="word-list">
           {wordList.length === 0
             ? <p class="no-words">Hover a word while watching to save it.</p>
-            : wordList.map(w => (
-              <div key={w.zh} class="word-row">
-                <span class="word-zh">{w.zh}</span>
-                <span class="word-meta">
-                  <div class="word-py">{w.py}</div>
-                  <div class="word-en">{w.en}</div>
-                </span>
-                {w.url && (
-                  <a class="word-link" href={w.url} target="_blank" title="Open video at time">
-                    <LinkIcon />
-                  </a>
-                )}
-                <button class="word-del" title="Remove" onClick={() => deleteWord(w.zh)}>
-                  <TrashIcon />
-                </button>
-              </div>
-            ))}
+            : wordList.map(w => {
+              const word = w.char ?? '';
+              return (
+                <div key={word} class="word-row">
+                  <span class="word-zh">{word}</span>
+                  <span class="word-meta">
+                    <div class="word-py">{w.py}</div>
+                    <div class="word-en">{w.en}</div>
+                  </span>
+                  {w.url && (
+                    <a class="word-link" href={w.url} target="_blank" title="Open video at time">
+                      <LinkIcon />
+                    </a>
+                  )}
+                  <button class="word-del" title="Remove" onClick={() => deleteWord(word)}>
+                    <TrashIcon />
+                  </button>
+                </div>
+              );
+            })}
         </div>
 
         <button id="export-btn" disabled={wordList.length === 0} onClick={toggleExportOpen}>

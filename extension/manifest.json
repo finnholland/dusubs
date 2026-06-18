@@ -10,6 +10,7 @@
     "webRequest",
     "https://www.dusubs.com/*",
     "https://dusubs.com/*",
+    "http://localhost/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
     "*://*.bilivideo.com/*"
@@ -57,6 +58,7 @@
       "world": "ISOLATED",
       "matches": [
         "https://www.dusubs.com/*",
+        "http://localhost/*",
         "https://dusubs.com/*"
       ],
       "js": [

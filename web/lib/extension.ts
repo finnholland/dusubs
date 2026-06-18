@@ -1,8 +1,9 @@
 import { SavedWord } from '../types';
 
 type ExtWord = {
-  zh?: string;
-  ja?: string;
+  char?: string;
+  zh?: string;       // legacy
+  ja?: string;       // legacy
   key?: string;      // legacy
   language?: SavedWord['language'];
   py?: string;
@@ -19,12 +20,11 @@ type ExtWord = {
 
 function toSavedWord(w: ExtWord): SavedWord {
   const lang = w.language ?? 'zh';
-  const word = w.zh ?? w.ja ?? w.key;
+  const word = w.char ?? w.zh ?? w.ja ?? w.key;
   return {
     id: word ?? w.en,
     language: lang,
-    zh: w.zh ?? (lang === 'zh' ? w.key : undefined),
-    ja: w.ja ?? (lang === 'ja' ? w.key : undefined),
+    char: word,
     py: w.py,
     en: w.en,
     sentZh: w.sentZh ?? (lang === 'zh' ? w.sentKey : undefined),
@@ -61,7 +61,7 @@ export function getWordsFromExtension(): Promise<SavedWord[] | null> {
 }
 
 export function saveWordToExtension(word: Omit<SavedWord, 'id'>): void {
-  window.postMessage({ type: 'DUSUBS_SAVE_WORD', word }, '*');
+  window.postMessage({ type: 'DUSUBS_SAVE_WORD', word: { ...word, char: word.char ?? word.zh ?? word.ja } }, '*');
 }
 
 export function deleteWordFromExtension(key: string): void {
