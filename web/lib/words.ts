@@ -55,7 +55,7 @@ export async function saveWord(
 ): Promise<string> {
   if (!uid) {
     saveWordToExtension(word);
-    return word.char ?? word.zh ?? word.ja ?? word.en;
+    return word.char ?? word.en;
   }
   const ref = collection(getDb(), 'users', uid, 'words');
   const docRef = await addDoc(ref, word);
@@ -91,9 +91,9 @@ export function exportWords(
   if (format === 'anki') {
     return words
       .map((w) => {
-        const front = w.char ?? w.zh ?? w.ja ?? w.en ?? '';
+        const front = w.char ?? w.en ?? '';
         let back = `${escHtml(w.py ?? '')}${w.py ? '<br>' : ''}${escHtml(w.en ?? '')}`;
-        const sentNative = w.sentZh ?? w.sentJa ?? '';
+        const sentNative = w.sentNative ?? '';
         const sentEn = w.sentEn ?? '';
         if (sentNative || sentEn) {
           back += `<br><i>${escHtml([sentNative, sentEn].filter(Boolean).join(' · '))}</i>`;
@@ -103,6 +103,6 @@ export function exportWords(
       .join('\n');
   }
   return words
-    .map((w) => `${w.char ?? w.zh ?? w.ja ?? w.en ?? ''}\t${w.py ? `${w.py} · ` : ''}${w.en ?? ''}`)
+    .map((w) => `${w.char ?? w.en ?? ''}\t${w.py ? `${w.py} · ` : ''}${w.en ?? ''}`)
     .join('\n');
 }

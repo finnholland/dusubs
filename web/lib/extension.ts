@@ -8,6 +8,7 @@ type ExtWord = {
   language?: SavedWord['language'];
   py?: string;
   en: string;
+  sentNative?: string;
   sentZh?: string;
   sentJa?: string;
   sentKey?: string;  // legacy
@@ -27,8 +28,7 @@ function toSavedWord(w: ExtWord): SavedWord {
     char: word,
     py: w.py,
     en: w.en,
-    sentZh: w.sentZh ?? (lang === 'zh' ? w.sentKey : undefined),
-    sentJa: w.sentJa ?? (lang === 'ja' ? w.sentKey : undefined),
+    sentNative: w.sentNative ?? w.sentZh ?? (lang === 'zh' ? w.sentKey : undefined) ?? w.sentJa ?? (lang === 'ja' ? w.sentKey : undefined),
     sentEn: w.sentEn,
     url: w.url,
     ts: 0,
@@ -61,7 +61,7 @@ export function getWordsFromExtension(): Promise<SavedWord[] | null> {
 }
 
 export function saveWordToExtension(word: Omit<SavedWord, 'id'>): void {
-  window.postMessage({ type: 'DUSUBS_SAVE_WORD', word: { ...word, char: word.char ?? word.zh ?? word.ja } }, '*');
+  window.postMessage({ type: 'DUSUBS_SAVE_WORD', word }, '*');
 }
 
 export function deleteWordFromExtension(key: string): void {

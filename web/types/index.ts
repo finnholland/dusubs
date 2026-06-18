@@ -1,13 +1,10 @@
 export interface SavedWord {
   id: string;
   language: 'zh' | 'ja' | 'es' | 'en' | 'fr';
-  char?: string;     // word (language-agnostic)
-  zh?: string;       // Chinese word (legacy)
-  ja?: string;       // Japanese word (legacy)
-  py?: string;       // pinyin (zh) or reading (ja)
-  en: string;        // definition
-  sentZh?: string;   // source sentence in Chinese
-  sentJa?: string;   // source sentence in Japanese
+  char?: string;
+  py?: string;
+  en: string;
+  sentNative?: string;
   sentEn?: string;   // source sentence in English
   url: string;       // youtube url with timestamp
   ts: number;        // video timestamp seconds

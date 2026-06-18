@@ -15,8 +15,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
   const [hintLevel, setHintLevel] = useState(0);
 
   const maxHints = freestyle ? 3 : 1;
-  const displayWord = word.char ?? word.zh ?? word.ja;
-  const displaySent = word.sentZh ?? word.sentJa;
+  const displayWord = word.char;
+  const sentNative = word.sentNative;
 
   return (
     <div className="flex flex-col items-center gap-6">
@@ -24,12 +24,13 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
         onClick={() => setFlipped((f) => !f)}
         className="relative w-full max-w-lg min-h-48 border border-white/10 rounded-2xl p-8 bg-white/5 hover:bg-white/8 transition-colors cursor-pointer text-center flex flex-col items-center justify-center gap-1"
       >
-        {!flipped && hintLevel < maxHints && (
+        {!flipped && (hintLevel < maxHints || hintLevel === maxHints) && (
           <button
+            disabled={hintLevel === maxHints}
             onClick={(e) => { e.stopPropagation(); setHintLevel((h) => h + 1); }}
-            className="absolute top-3 right-3 text-xs text-white/50 hover:text-yellow-400 border border-white/30 hover:border-yellow-400 rounded-full px-2.5 py-1 transition-colors cursor-pointer"
+            className="absolute top-3 right-3 text-xs border rounded-full px-2.5 py-1 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default text-white/50 hover:text-yellow-400 border-white/30 hover:border-yellow-400 disabled:hover:text-white/50 disabled:hover:border-white/30"
           >
-            {freestyle ? `Hint ${hintLevel + 1}/3` : 'Hint'}
+            {freestyle ? `Hint ${hintLevel}/${maxHints}` : (hintLevel === 0 ? 'Hint 0/1' : 'Hint 1/1')}
           </button>
         )}
 
@@ -38,8 +39,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {displayWord && (
               <span className="text-yellow-400 text-4xl font-semibold">{displayWord}</span>
             )}
-            {hintLevel >= 1 && displaySent && (
-              <p className="text-white/40 text-sm italic mt-2">{displaySent}</p>
+            {hintLevel >= 1 && sentNative && (
+              <p className="text-white/40 text-sm italic mt-2">{sentNative}</p>
             )}
             {freestyle && hintLevel >= 2 && word.sentEn && (
               <p className="text-white/40 text-sm italic">{word.sentEn}</p>
@@ -61,8 +62,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {word.sentEn && (
               <p className="text-white/40 text-sm italic mt-2">{word.sentEn}</p>
             )}
-            {word.sentZh && (
-              <p className="text-white/40 text-sm italic">{word.sentZh}</p>
+            {sentNative && (
+              <p className="text-white/40 text-sm italic">{sentNative}</p>
             )}
           </>
         )}

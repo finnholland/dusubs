@@ -283,7 +283,12 @@ export default function StudyPage() {
           {isFreestyle ? 'Practice again' : 'Freestyle'}
         </button>
         <button
-          onClick={() => setStatus('selecting')}
+          onClick={() => {
+            getWords(user?.uid ?? null).then(({ words }) => {
+              setAllWords(words);
+              setStatus('selecting');
+            });
+          }}
           className="text-sm hover:text-yellow-400 text-white/80 transition-colors cursor-pointer"
         >
           Back to list
