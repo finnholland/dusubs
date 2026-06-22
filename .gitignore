@@ -3,6 +3,7 @@ cedict.json.gz
 node_modules/
 popup.bundle.js
 popup.bundle.css
+content.bundle.js
 
 web/.next
 /web/dist

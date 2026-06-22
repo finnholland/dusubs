@@ -60,8 +60,8 @@ export default function WordCard({ word, onDelete, showLanguage }: Props) {
       {displaySent && (
         <p className="text-white/40 text-xs italic border-l-2 border-yellow-400/30 pl-2">{displaySent}</p>
       )}
-      {word.sentEn && (
-        <p className="text-white/30 text-xs italic">{word.sentEn}</p>
+      {word.sentOther && (
+        <p className="text-white/30 text-xs italic">{word.sentOther}</p>
       )}
       <div className="flex items-center gap-4 mt-2 flex-row width-full justify-between">
         <a
