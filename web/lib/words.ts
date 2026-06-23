@@ -94,9 +94,9 @@ export function exportWords(
         const front = w.char ?? w.en ?? '';
         let back = `${escHtml(w.py ?? '')}${w.py ? '<br>' : ''}${escHtml(w.en ?? '')}`;
         const sentNative = w.sentNative ?? '';
-        const sentEn = w.sentEn ?? '';
-        if (sentNative || sentEn) {
-          back += `<br><i>${escHtml([sentNative, sentEn].filter(Boolean).join(' · '))}</i>`;
+        const sentOther = w.sentOther ?? '';
+        if (sentNative || sentOther) {
+          back += `<br><i>${escHtml([sentNative, sentOther].filter(Boolean).join(' · '))}</i>`;
         }
         return `${front}\t${back}`;
       })

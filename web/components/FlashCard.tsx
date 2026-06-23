@@ -42,8 +42,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {hintLevel >= 1 && sentNative && (
               <p className="text-white/40 text-sm italic mt-2">{sentNative}</p>
             )}
-            {freestyle && hintLevel >= 2 && word.sentEn && (
-              <p className="text-white/40 text-sm italic">{word.sentEn}</p>
+            {freestyle && hintLevel >= 2 && word.sentOther && (
+              <p className="text-white/40 text-sm italic">{word.sentOther}</p>
             )}
             {freestyle && hintLevel >= 3 && word.py && (
               <span className="text-white/50 text-base">{word.py}</span>
@@ -59,8 +59,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
               <span className="text-white/50 text-base">{word.py}</span>
             )}
             <span className="text-white text-xl">{word.en}</span>
-            {word.sentEn && (
-              <p className="text-white/40 text-sm italic mt-2">{word.sentEn}</p>
+            {word.sentOther && (
+              <p className="text-white/40 text-sm italic mt-2">{word.sentOther}</p>
             )}
             {sentNative && (
               <p className="text-white/40 text-sm italic">{sentNative}</p>

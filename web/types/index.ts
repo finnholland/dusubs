@@ -4,8 +4,8 @@ export interface SavedWord {
   char?: string;
   py?: string;
   en: string;
-  sentNative?: string;
-  sentEn?: string;   // source sentence in English
+  sentNative?: string;  // sentence in the learning language (same language as the saved word)
+  sentOther?: string;   // sentence in the other subtitle track
   url: string;       // youtube url with timestamp
   ts: number;        // video timestamp seconds
   savedAt: number;   // unix ms

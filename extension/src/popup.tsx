@@ -24,7 +24,7 @@ const browser: {
 } = (globalThis as any).browser ?? (globalThis as any).chrome;
 
 interface Track { languageCode: string; name: string; }
-interface SavedWord { char?: string; py: string; en: string; url?: string; language?: string; sentNative?: string; sentZh?: string; sentJa?: string; sentEn?: string; }
+interface SavedWord { char?: string; py: string; en: string; url?: string; language?: string; sentNative?: string; sentZh?: string; sentJa?: string; sentOther?: string; }
 interface Settings {
   fontScale: number; subPosition: number;
   track1: string; track2: string;
@@ -214,8 +214,8 @@ function App() {
       const word = w.char ?? '';
       let back = `${escHtml(w.py)}<br>${escHtml(w.en)}`;
       const sent = w.sentNative ?? w.sentZh ?? w.sentJa;
-      if (w.sentEn || sent) {
-        back += `<br><i>${escHtml([sent, w.sentEn].filter(Boolean).join(' · '))}</i>`;
+      if (w.sentOther || sent) {
+        back += `<br><i>${escHtml([sent, w.sentOther].filter(Boolean).join(' · '))}</i>`;
       }
       return `${word}\t${back}`;
     });

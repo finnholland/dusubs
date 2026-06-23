@@ -12,7 +12,7 @@ type ExtWord = {
   sentZh?: string;
   sentJa?: string;
   sentKey?: string;  // legacy
-  sentEn?: string;
+  sentOther?: string;
   url: string;
   leitnerBox?: number;
   lastReviewed?: number | null;
@@ -29,7 +29,7 @@ function toSavedWord(w: ExtWord): SavedWord {
     py: w.py,
     en: w.en,
     sentNative: w.sentNative ?? w.sentZh ?? (lang === 'zh' ? w.sentKey : undefined) ?? w.sentJa ?? (lang === 'ja' ? w.sentKey : undefined),
-    sentEn: w.sentEn,
+    sentOther: w.sentOther,
     url: w.url,
     ts: 0,
     savedAt: 0,
