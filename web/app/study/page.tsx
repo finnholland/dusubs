@@ -85,6 +85,13 @@ export default function StudyPage() {
     setStatus('studying');
   };
 
+  const backToList = () => {
+    getWords(user?.uid ?? null).then(({ words }) => {
+      setAllWords(words);
+      setStatus('selecting');
+    });
+  }
+
   const changeLang = (lang: SavedWord['language'] | 'all') => {
     studyLangRef.current = lang;
     setStudyLang(lang);
@@ -153,11 +160,10 @@ export default function StudyPage() {
             <button
               key={m}
               onClick={() => setSelectionMode(m)}
-              className={`px-4 py-1.5 rounded-full text-sm border transition-colors cursor-pointer ${
-                selectionMode === m
+              className={`px-4 py-1.5 rounded-full text-sm border transition-colors cursor-pointer ${selectionMode === m
                   ? 'bg-yellow-400 text-black border-yellow-400 font-medium'
                   : 'border-white/20 text-white/60 hover:border-yellow-400 hover:text-yellow-400'
-              }`}
+                }`}
             >
               {m === 'review' ? 'Review' : 'Freestyle'}
             </button>
@@ -198,11 +204,10 @@ export default function StudyPage() {
               >
                 <span className="text-white/80 text-base">{lang.label}</span>
                 <div className="flex items-center gap-4">
-                  <span className={`text-sm tabular-nums ${
-                    selectionMode === 'review'
+                  <span className={`text-sm tabular-nums ${selectionMode === 'review'
                       ? dueCount > 0 ? 'text-white/50' : 'text-white/25'
                       : 'text-white/50'
-                  }`}>
+                    }`}>
                     {selectionMode === 'review'
                       ? `${dueCount} due`
                       : `${words.length} words`}
@@ -283,12 +288,7 @@ export default function StudyPage() {
           {isFreestyle ? 'Practice again' : 'Freestyle'}
         </button>
         <button
-          onClick={() => {
-            getWords(user?.uid ?? null).then(({ words }) => {
-              setAllWords(words);
-              setStatus('selecting');
-            });
-          }}
+          onClick={backToList}
           className="text-sm hover:text-yellow-400 text-white/80 transition-colors cursor-pointer"
         >
           Back to list
@@ -302,7 +302,7 @@ export default function StudyPage() {
       <div className="grid grid-cols-3 items-center text-sm text-white/40 min-h-5">
         <div className="text-left">
           {isFreestyle && (
-            <button onClick={() => setStatus('selecting')} className="hover:text-yellow-400 transition-colors cursor-pointer">← Back to list</button>
+            <button onClick={backToList} className="hover:text-yellow-400 transition-colors cursor-pointer">← Back to list</button>
           )}
         </div>
         <div className="text-center">Card {index + 1} of {queue.length}{isFreestyle ? ' · freestyle' : ''}</div>
