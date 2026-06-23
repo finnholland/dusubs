@@ -136,7 +136,38 @@ export function lookupJapanese(token) {
 }
 
 /** @param {string} text @returns {string} */
+export function renderChinese(text) {
+  if (!text) return '';
+  const lib = /** @type {any} */ (globalThis.pinyinPro);
+  if (!lib) return escapeHtmlLang(text);
+  const chars = [...text];
+  let pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
+  if (pinyinArr.length !== chars.length) return escapeHtmlLang(text);
+  const rawPinyinArr = pinyinArr.slice();
+  let correctedSet = /** @type {Set<number>} */ (new Set());
+  const hpfDict = getHpfDict();
+  if (cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
+    ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
+  }
+  let sandhiColour = cfg.track1Color;
+  if (sandhiColour === '#ffffff') sandhiColour = cfg.track2Color;
+  if (sandhiColour === '#ffffff') sandhiColour = '#ffe97a';
+  return chars.map((char, i) => {
+    const py = pinyinArr[i] || '';
+    const escaped = escapeHtmlLang(char);
+    if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
+      const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
+      correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
+      const rtStyle = cfg.pinyinEnabled ? `color:${rtColor}; margin-bottom:6px` : 'visibility:hidden';
+      return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}<rt style="${rtStyle}">${py}</rt></ruby>`;
+    }
+    return escaped;
+  }).join('');
+}
+
+/** @param {string} text @returns {string} */
 export function renderJapanese(text) {
+  if (!text) return '';
   if (!kuromoji) { loadKuromoji(); return escapeHtmlLang(text); }
   const tokens = kuromoji.tokenize(text);
   return tokens.map(token => {
@@ -149,12 +180,12 @@ export function renderJapanese(text) {
     const escapedPos = escapeHtmlLang(pos);
     if (hasKanji(surface) && reading) {
       const hi = escapeHtmlLang(toHiragana(reading));
-      const rtStyle = cfg.pinyinEnabled ? '' : 'visibility:hidden';
+      const rtStyle = cfg.pinyinEnabled ? 'color:#fff; margin-bottom:6px' : 'visibility:hidden';
       return `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
     }
     const rdAttr = reading ? ` data-rd="${escapeHtmlLang(toHiragana(reading))}"` : '';
     return hasKanji(text) ?
-      `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? '' : 'visibility:hidden'}"/></ruby></span>` :
+      `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? 'color:#fff; margin-bottom:6px' : 'visibility:hidden'}"/></ruby></span>` :
       `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}>${escapedSurface}</span>`;
   }).join('');
 }

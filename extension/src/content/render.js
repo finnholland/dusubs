@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, cues, renderState } from './state.js';
 import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs } from './dom.js';
-import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderJapanese, buildCorrectedPinyin, getHpfDict } from './lang.js';
+import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderChinese, renderJapanese } from './lang.js';
 
 // ── Apply styles ───────────────────────────────────────────────────────────
 export function applyStyle() {
@@ -65,36 +65,6 @@ export function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// ── Ruby rendering ─────────────────────────────────────────────────────────
-/** @param {string} text @returns {string} */
-export function renderRuby(text) {
-  if (!text) return '';
-  const lib = /** @type {any} */ (globalThis.pinyinPro);
-  if (!lib) return escapeHtml(text);
-  const chars = [...text];
-  let pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
-  if (pinyinArr.length !== chars.length) return escapeHtml(text);
-  const rawPinyinArr = pinyinArr.slice();
-  let correctedSet = /** @type {Set<number>} */ (new Set());
-  const hpfDict = getHpfDict();
-  if (cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
-    ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
-  }
-  let sandhiColour = cfg.track1Color;
-  if (sandhiColour === '#ffffff') sandhiColour = cfg.track2Color;
-  if (sandhiColour === '#ffffff') sandhiColour = '#ffe97a';
-  return chars.map((char, i) => {
-    const py = pinyinArr[i] || '';
-    const escaped = escapeHtml(char);
-    if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
-      const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
-      correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
-      const rtStyle = (cfg.learnMode === 'zh' && cfg.pinyinEnabled) ? `color:${rtColor}` : 'visibility:hidden';
-      return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}<rt style="${rtStyle}">${py}</rt></ruby>`;
-    }
-    return escaped;
-  }).join('');
-}
 
 // ── Cue parsing ────────────────────────────────────────────────────────────
 /**
@@ -196,13 +166,13 @@ export function tick() {
 
   if (top !== renderState.lastTop || showPinyinChanged || toneSandhiChanged) {
     renderState.lastTop = top;
-    if (topLang === 'zh' && cfg.learnMode === 'zh') setHTML(topBox, renderRuby(top));
+    if (topLang === 'zh' && cfg.learnMode === 'zh') setHTML(topBox, renderChinese(top));
     else if (topLang === 'ja' && cfg.learnMode === 'ja') setHTML(topBox, renderJapanese(top));
     else topBox.textContent = top;
   }
   if (bottom !== renderState.lastBottom || showPinyinChanged || toneSandhiChanged) {
     renderState.lastBottom = bottom;
-    if (bottomLang === 'zh' && cfg.learnMode === 'zh') setHTML(bottomBox, renderRuby(bottom));
+    if (bottomLang === 'zh' && cfg.learnMode === 'zh') setHTML(bottomBox, renderChinese(bottom));
     else if (bottomLang === 'ja' && cfg.learnMode === 'ja') setHTML(bottomBox, renderJapanese(bottom));
     else bottomBox.textContent = bottom;
   }

@@ -8,10 +8,9 @@
     "build": "npm run build:popup && npm run build:content",
     "build:web": "cd web && npm run build",
     "web": "cd web && npm run dev",
-    "watch:popup": "npm run build:popup -- --watch",
-    "watch:content": "npm run build:content -- --watch",
-    "watch:ff": "node scripts/watch.js firefox",
-    "watch:chrome": "node scripts/watch.js chrome",
+    "watch": "node scripts/watch.js",
+    "watch:ff": "node scripts/watch.js firefox dev",
+    "watch:chrome": "node scripts/watch.js chrome dev",
     "build:ja-dict": "node scripts/build-ja-dict.js",
     "release": "node scripts/release.js"
   },

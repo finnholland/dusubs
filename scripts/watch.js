@@ -3,14 +3,18 @@ const fs = require('fs');
 const path = require('path');
 
 const target = process.argv[2];
-if (!['firefox', 'chrome'].includes(target)) {
-  console.error('Usage: node scripts/watch.js [firefox|chrome]');
-  process.exit(1);
-}
+const dev = process.argv[3] === 'dev';
 
-const manifestSrc = `extension/manifests/manifest.${target === 'firefox' ? 'firefox' : 'chrome'}.json`;
-fs.copyFileSync(manifestSrc, 'extension/manifest.json');
-console.log(`Copied ${target} manifest`);
+if (target) {
+  if (!['firefox', 'chrome'].includes(target)) {
+    console.error('Usage: node scripts/watch.js [firefox|chrome] [dev]');
+    process.exit(1);
+  }
+  const suffix = dev ? '.dev' : '';
+  const manifestSrc = `extension/manifests/manifest.${target}${suffix}.json`;
+  fs.copyFileSync(manifestSrc, 'extension/manifest.json');
+  console.log(`Copied ${target}${dev ? ' dev' : ''} manifest`);
+}
 
 const esbuild = path.join('node_modules', '.bin', 'esbuild');
 
