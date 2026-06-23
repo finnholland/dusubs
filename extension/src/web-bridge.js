@@ -3,7 +3,6 @@
 // Runs as an ISOLATED content script on the web app origin.
 /* global chrome */
 const browser = globalThis.browser ?? globalThis.chrome;
-console.log('[dusubs] web-bridge injected');
 
 window.addEventListener('message', async (e) => {
   if (typeof e.data?.type !== 'string' || !e.data.type.startsWith('DUSUBS_')) return;
