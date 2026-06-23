@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Dusubs (dev)",
-  "version": "1.2.2.0",
+  "version": "1.2.3",
   "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
   "permissions": [
     "activeTab",
