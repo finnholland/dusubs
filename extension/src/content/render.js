@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, cues, renderState } from './state.js';
 import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs } from './dom.js';
-import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderChinese, renderJapanese } from './lang.js';
+import { detectLang, loadDict, loadKuromoji, loadJaDict, loadEsDict, getKuromoji, renderChinese, renderJapanese, renderSpanish } from './lang.js';
 
 // ── Apply styles ───────────────────────────────────────────────────────────
 export function applyStyle() {
@@ -160,6 +160,7 @@ export function tick() {
 
   if (cfg.learnMode === 'ja' && !getKuromoji()) loadKuromoji();
   if (cfg.learnMode === 'ja') loadJaDict();
+  if (cfg.learnMode === 'es') loadEsDict();
 
   const topLang = detectLang(cfg.track1 || '');
   const bottomLang = detectLang(cfg.track2 || '');
@@ -168,12 +169,14 @@ export function tick() {
     renderState.lastTop = top;
     if (topLang === 'zh' && cfg.learnMode === 'zh') setHTML(topBox, renderChinese(top));
     else if (topLang === 'ja' && cfg.learnMode === 'ja') setHTML(topBox, renderJapanese(top));
+    else if (topLang === 'es' && cfg.learnMode === 'es') setHTML(topBox, renderSpanish(top));
     else topBox.textContent = top;
   }
   if (bottom !== renderState.lastBottom || showPinyinChanged || toneSandhiChanged) {
     renderState.lastBottom = bottom;
     if (bottomLang === 'zh' && cfg.learnMode === 'zh') setHTML(bottomBox, renderChinese(bottom));
     else if (bottomLang === 'ja' && cfg.learnMode === 'ja') setHTML(bottomBox, renderJapanese(bottom));
+    else if (bottomLang === 'es' && cfg.learnMode === 'es') setHTML(bottomBox, renderSpanish(bottom));
     else bottomBox.textContent = bottom;
   }
 

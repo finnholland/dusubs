@@ -6,6 +6,7 @@ import { browser, LOG, cfg } from './state.js';
 export function detectLang(code) {
   if (/^zh/i.test(code)) return 'zh';
   if (/^ja/i.test(code)) return 'ja';
+  if (/^es/i.test(code)) return 'es';
   return 'en';
 }
 
@@ -117,6 +118,46 @@ export async function loadJaDict() {
     LOG('jaDict load failed:', e);
     jaDictLoading = false;
   }
+}
+
+// ── Spanish dictionary ─────────────────────────────────────────────────────
+/** @type {Record<string, { en: string[], pos: string }> | null} */
+let esDict = null;
+let esDictLoading = false;
+
+export function getEsDict() { return esDict; }
+
+export async function loadEsDict() {
+  if (esDict || esDictLoading) return;
+  esDictLoading = true;
+  try {
+    const resp = await fetch(browser.runtime.getURL('vendor/es-dict.json.gz'));
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    esDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    LOG('esDict loaded:', Object.keys(esDict).length, 'entries');
+  } catch (e) {
+    LOG('esDict load failed:', e);
+    esDictLoading = false;
+  }
+}
+
+/** @param {string} word */
+export function lookupSpanish(word) {
+  if (!esDict) return null;
+  return esDict[word] ?? esDict[word.toLowerCase()] ?? null;
+}
+
+/** @param {string} text @returns {string} */
+export function renderSpanish(text) {
+  if (!text) return '';
+  // Split on whitespace and punctuation, preserving delimiters as separate tokens
+  const tokens = text.split(/(\s+|[¡!¿?.,;:"""''«»—\-()])/);
+  return tokens.map(tok => {
+    if (!tok) return '';
+    if (/^\s+$/.test(tok) || /^[¡!¿?.,;:"""''«»—\-()\s]+$/.test(tok)) return escapeHtmlLang(tok);
+    const escaped = escapeHtmlLang(tok);
+    return `<span class="dusub-word" data-base="${escaped}">${escaped}</span>`;
+  }).join('');
 }
 
 export function toHiragana(katakana) {

@@ -1,15 +1,19 @@
-cedict.json
-cedict.json.gz
+web/.next
+/web/dist
 node_modules/
 popup.bundle.js
 popup.bundle.css
 content.bundle.js
 
-web/.next
-/web/dist
 dict/
+cedict.json
+cedict.json.gz
+es-dict.json
+es-dict.json.gz
 ja-dict.json
 ja-dict.json.gz
+scripts/kaikki-es.jsonl
+scripts/kaikki-en-es.jsonl
 scripts/jmdict-english.json
 artifacts-chrome/dusubs-chrome.zip
 

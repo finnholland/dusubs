@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, savedZh, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
-import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang } from './lang.js';
+import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, loadEsDict, getEsDict, lookupSpanish, hasKanji, detectLang } from './lang.js';
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
@@ -149,6 +149,18 @@ export function attachHover(box, trackFn, getLastText) {
         ? [entry.rd, romaji].filter(Boolean).join('  ')
         : romaji || entry.rd;
       showTooltip({ word: base, pinyin: reading, defs: entryPos + defs }, wordSpan);
+      return;
+    }
+
+    if (cfg.learnMode === 'es') {
+      const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
+      if (!wordSpan) return;
+      if (!getEsDict()) { loadEsDict(); return; }
+      const base = /** @type {HTMLElement} */ (wordSpan).dataset.base ?? '';
+      const entry = lookupSpanish(base);
+      if (!entry) return;
+      const esPos = entry.pos ? `[${entry.pos}] ` : '';
+      showTooltip({ word: base, pinyin: '', defs: esPos + entry.en.join('; ') }, wordSpan);
       return;
     }
 

@@ -30,7 +30,7 @@ interface Settings {
   track1: string; track2: string;
   track1Color: string; track2Color: string;
   stroke: boolean; window: boolean; shadow: boolean;
-  learnMode: 'none' | 'zh' | 'ja';
+  learnMode: 'none' | 'zh' | 'ja' | 'es';
   pinyinEnabled: boolean; sandhiEnabled: boolean;
 }
 
@@ -38,7 +38,7 @@ const DEFAULTS: Settings = {
   fontScale: 100, subPosition: 8, track1: '', track2: '',
   track1Color: '#ffffff', track2Color: '#ffe97a',
   stroke: true, window: false, shadow: false,
-  learnMode: 'none' as 'none' | 'zh' | 'ja', pinyinEnabled: true, sandhiEnabled: true,
+  learnMode: 'none' as 'none' | 'zh' | 'ja' | 'es', pinyinEnabled: true, sandhiEnabled: true,
 };
 
 const COLORS_ZH = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
@@ -162,7 +162,7 @@ function App() {
         track2: tabConfig?.track2 ?? '',
         track1Color: data.track1Color, track2Color: data.track2Color,
         stroke: data.stroke, window: data.window, shadow: data.shadow,
-        learnMode: (tabConfig?.learnMode ?? data.learnMode ?? 'none') as 'none' | 'zh' | 'ja',
+        learnMode: (tabConfig?.learnMode ?? data.learnMode ?? 'none') as 'none' | 'zh' | 'ja' | 'es',
         pinyinEnabled: data.pinyinEnabled ?? true,
         sandhiEnabled: data.sandhiEnabled ?? true,
       });
@@ -251,15 +251,17 @@ function App() {
   }
 
   function cycleLearnMode() {
-    const next: 'none' | 'zh' | 'ja' =
+    const next: 'none' | 'zh' | 'ja' | 'es' =
       s.learnMode === 'none' ? 'zh' :
-        s.learnMode === 'zh' ? 'ja' : 'none';
+        s.learnMode === 'zh' ? 'ja' :
+          s.learnMode === 'ja' ? 'es' : 'none';
     set('learnMode', next);
   }
   const learnLabel =
     s.learnMode === 'none' ? 'Off' :
       s.learnMode === 'zh' ? '中 Chinese' :
-        '日 Japanese';
+        s.learnMode === 'ja' ? '日 Japanese' :
+          'ES Spanish';
   const { version } = browser.runtime.getManifest();
 
   const wordList = Object.values(words);

@@ -4,7 +4,7 @@
 /**
  * @typedef {{ fontScale: number, subPosition: number, track1: string, track2: string,
  *             track1Color: string, track2Color: string, stroke: boolean, window: boolean, shadow: boolean,
- *             learnMode: 'none'|'en'|'zh'|'ja', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
+ *             learnMode: 'none'|'en'|'zh'|'ja'|'es', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 

@@ -2,7 +2,7 @@
   "name": "dusubs",
   "private": true,
   "scripts": {
-    "postinstall": "node scripts/make-dict.js && node scripts/build-ja-dict.js && node -e \"const {gzipSync}=require('zlib'),fs=require('fs');['extension/vendor/cedict.json','extension/vendor/ja-dict.json'].forEach(f=>{fs.writeFileSync(f+'.gz',gzipSync(fs.readFileSync(f)));fs.unlinkSync(f);});\" && node -e \"require('fs').mkdirSync('extension/dict', { recursive: true }); require('fs').readdirSync('node_modules/kuromoji/dict').forEach(f => require('fs').copyFileSync('node_modules/kuromoji/dict/' + f, 'extension/dict/' + f))\"",
+    "postinstall": "node scripts/make-dict.js && node scripts/build-ja-dict.js && node scripts/build-es-dict.js && node -e \"const {gzipSync}=require('zlib'),fs=require('fs');['extension/vendor/cedict.json','extension/vendor/ja-dict.json','extension/vendor/es-dict.json'].forEach(f=>{fs.writeFileSync(f+'.gz',gzipSync(fs.readFileSync(f)));fs.unlinkSync(f);});\" && node -e \"require('fs').mkdirSync('extension/dict', { recursive: true }); require('fs').readdirSync('node_modules/kuromoji/dict').forEach(f => require('fs').copyFileSync('node_modules/kuromoji/dict/' + f, 'extension/dict/' + f))\"",
     "build:popup": "esbuild extension/src/popup.tsx --bundle --outfile=extension/src/popup.bundle.js --jsx=automatic --jsx-import-source=preact",
     "build:content": "esbuild extension/src/content.js --bundle --outfile=extension/src/content.bundle.js --format=iife --platform=browser",
     "build": "npm run build:popup && npm run build:content",
@@ -12,6 +12,7 @@
     "watch:ff": "node scripts/watch.js firefox dev",
     "watch:chrome": "node scripts/watch.js chrome dev",
     "build:ja-dict": "node scripts/build-ja-dict.js",
+    "build:es-dict": "node scripts/build-es-dict.js",
     "release": "node scripts/release.js"
   },
   "devDependencies": {
