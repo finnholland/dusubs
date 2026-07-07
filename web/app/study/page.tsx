@@ -12,6 +12,7 @@ const STUDY_LANGS: { value: SavedWord['language'] | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'zh', label: '🇨🇳 中文' },
   { value: 'ja', label: '🇯🇵 日本語' },
+  { value: 'es', label: '🇪🇸 Español' },
 ];
 
 function LangSwitcher({ value, onChange }: { value: SavedWord['language'] | 'all'; onChange: (l: SavedWord['language'] | 'all') => void }) {

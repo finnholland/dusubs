@@ -6,10 +6,10 @@ const ACTIVE_LANGUAGES: { value: SavedWord['language'] | 'all'; label: string }[
   { value: 'all', label: 'All' },
   { value: 'zh', label: '中文' },
   { value: 'ja', label: '日本語' },
+  { value: 'es', label: 'Español' },
 ];
 
 const COMING_SOON_LANGUAGES: { value: SavedWord['language'] | 'all'; label: string }[] = [
-  { value: 'es', label: 'Español' },
   { value: 'fr', label: 'Français' },
   { value: 'en', label: 'English' },
 ];
