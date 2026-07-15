@@ -42,14 +42,26 @@ export default function LandingPage() {
 
       {/* CTAs */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <a
-          href={STORE_URLS[primaryStore]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-yellow-400 text-[#1a1a2e] font-semibold px-8 py-3 rounded-full hover:bg-yellow-300 transition-colors"
-        >
-          Install for {storeLabels[primaryStore]}
-        </a>
+        {primaryStore === 'chrome' ? (
+          <div className="flex flex-col items-center gap-1">
+            <button
+              disabled
+              className="bg-yellow-400/50 text-[#1a1a2e]/50 font-semibold px-8 py-3 rounded-full cursor-not-allowed"
+            >
+              Install for Chrome
+            </button>
+            <span className="text-white/40 text-sm">(coming soon)</span>
+          </div>
+        ) : (
+          <a
+            href={STORE_URLS[primaryStore]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-yellow-400 text-[#1a1a2e] font-semibold px-8 py-3 rounded-full hover:bg-yellow-300 transition-colors"
+          >
+            Install for {storeLabels[primaryStore]}
+          </a>
+        )}
         {/* {user ? (
           <Link
             href="/dashboard"
