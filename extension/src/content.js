@@ -57,11 +57,7 @@ function clearForNavigation() {
   topBox.textContent = ''; bottomBox.textContent = '';
 }
 
-window.addEventListener('yt-navigate-start', () => {
-  clearForNavigation();
-  setLastTrackUrls(null);
-  if (!trackManuallySet) { patchCfg({ track1: '', track2: '' }); }
-});
+let currentVideoId = null;
 
 // ── Track data from MAIN world ─────────────────────────────────────────────
 window.addEventListener(CHANNEL, (e) => {
@@ -69,8 +65,15 @@ window.addEventListener(CHANNEL, (e) => {
   const { type, payload } = e.detail || {};
   if (type !== 'tracks') return;
   const { videoId, tracks } = payload;
+  // yt-navigate-start can fire (e.g. around tab visibility changes) without the
+  // video actually changing — only reset state once the videoId truly differs,
+  // otherwise this replays as a spurious full reload of in-sync subtitles.
+  if (videoId === currentVideoId) return;
+  currentVideoId = videoId;
   LOG('tracks from main, videoId:', videoId, 'count:', tracks.length);
   clearForNavigation();
+  setLastTrackUrls(null);
+  if (!trackManuallySet) { patchCfg({ track1: '', track2: '' }); }
   setLocalTracks(tracks.map(t => ({ languageCode: t.code, name: t.name })));
   browser.storage.local.set({ availableTracks: localTracks }).catch(() => { });
   setLastTrackUrls(Object.fromEntries(tracks.map(t => [t.code, t.url])));

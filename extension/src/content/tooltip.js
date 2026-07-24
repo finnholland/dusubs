@@ -1,6 +1,6 @@
 // @ts-check
 import { browser, LOG, cfg, savedZh, renderState } from './state.js';
-import { topBox, bottomBox, tooltip } from './dom.js';
+import { topBox, bottomBox, tooltip, getVideo } from './dom.js';
 import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang } from './lang.js';
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
@@ -70,7 +70,7 @@ export function showTooltip(result, anchor) {
 
 /** @param {{ word: string, pinyin: string, defs: string }} result */
 function saveWord(result) {
-  const video = document.querySelector('video');
+  const video = getVideo();
   const t = video ? video.currentTime - 2 : 0;
   const sep = location.href.includes('?') ? '&' : '?';
   const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');

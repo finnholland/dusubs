@@ -103,6 +103,12 @@ export function attachOverlay() {
   if (!document.body.contains(tooltip)) document.body.appendChild(tooltip);
 }
 
+// Gets the main video rather than 
+export function getVideo() {
+  const scope = (overlayContainer && overlayContainer !== document.body) ? overlayContainer : document;
+  return scope.querySelector('video');
+}
+
 if (document.body) attachOverlay();
 else document.addEventListener('DOMContentLoaded', attachOverlay);
 

@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, cues, renderState } from './state.js';
-import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs } from './dom.js';
-import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderChinese, renderJapanese } from './lang.js';
+import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs, getVideo } from './dom.js';
+import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderJapanese, buildCorrectedPinyin, getHpfDict } from './lang.js';
 
 // ── Apply styles ───────────────────────────────────────────────────────────
 export function applyStyle() {
@@ -118,7 +118,7 @@ export function tick() {
   attachOverlay();
   applyStyle();
 
-  const video = document.querySelector('video');
+  const video = getVideo();
 
   if (overlayContainer && overlayContainer !== document.body) {
     root.style.bottom = (cfg.subPosition || 8) + '%';
