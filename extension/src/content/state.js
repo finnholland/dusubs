@@ -4,7 +4,7 @@
 /**
  * @typedef {{ fontScale: number, subPosition: number, track1: string, track2: string,
  *             track1Color: string, track2Color: string, stroke: boolean, window: boolean, shadow: boolean,
- *             learnMode: 'none'|'en'|'zh'|'ja', pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
+ *             learnEnabled: boolean, pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -19,7 +19,7 @@ export const DEFAULTS = {
   track1: '', track2: '',
   track1Color: '#ffffff', track2Color: '#ffe97a',
   stroke: true, window: false, shadow: false,
-  learnMode: 'none', pinyinEnabled: true, sandhiEnabled: true,
+  learnEnabled: false, pinyinEnabled: true, sandhiEnabled: true,
 };
 
 /** @type {Config} */

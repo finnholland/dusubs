@@ -2,12 +2,8 @@
 import { browser, LOG, cfg } from './state.js';
 
 // ── Language detection ─────────────────────────────────────────────────────
-/** @param {string} code @returns {'zh' | 'ja' | 'en'} */
-export function detectLang(code) {
-  if (/^zh/i.test(code)) return 'zh';
-  if (/^ja/i.test(code)) return 'ja';
-  return 'en';
-}
+import { detectLang, getActiveLearnLang } from './detect-lang.js';
+export { detectLang, getActiveLearnLang };
 
 // ── Chinese dictionary ─────────────────────────────────────────────────────
 /** @type {Record<string, [string, string]> | null} */
@@ -146,7 +142,7 @@ export function renderChinese(text) {
   const rawPinyinArr = pinyinArr.slice();
   let correctedSet = /** @type {Set<number>} */ (new Set());
   const hpfDict = getHpfDict();
-  if (cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
+  if (getActiveLearnLang(cfg) === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
     ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
   }
   let sandhiColour = cfg.track1Color;

@@ -141,20 +141,6 @@ body {
   font-weight: 300;
 }
 
-.learn-btn {
-  font-size: 12px;
-  background: #252545;
-  color: #eee;
-  border: 1px solid #3a3a6a;
-  border-radius: 5px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.learn-btn:hover {
-  background: #2e2e60;
-}
-
 .popup-footer {
   width: 100%;
   display: flex;
@@ -297,6 +283,27 @@ a:hover {
   text-decoration: underline;
 }
 
+#study-now-btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  padding: 7px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #1a1a2e;
+  color: #f0c040;
+  border: 1px solid #f0c040;
+  border-radius: 5px;
+  text-decoration: none;
+}
+
+#study-now-btn:hover {
+  background: #2e2e60;
+  text-decoration: none;
+}
+
 #word-list {
   max-height: 280px;
   overflow-y: auto;
@@ -333,7 +340,7 @@ a:hover {
   min-width: 0;
 }
 
-.word-py {
+.word-reading {
   font-size: 11px;
   color: #f0c040;
 }

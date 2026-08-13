@@ -17,9 +17,11 @@ The extension renders a floating overlay directly on the video. Chinese subtitle
 
 - **Chinese & Japanese** — pinyin for Chinese; furigana for Japanese
 - **Dual-track subtitles** — pick any two tracks from the video's available captions independently
+- **Learn mode** — a single on/off toggle; when on, it automatically studies whichever of your two selected tracks is Chinese or Japanese (top track wins if both are), so hover, definitions, and saving are always keyed to the right language
 - **Hover to look up** — hover any word to see its reading and dictionary definitions in a tooltip
 - **One-tap save** — click a word to save it (with sentence context) to your word list
 - **Pinyin / furigana toggle** — hide annotations to test yourself, reveal on demand
+- **Tone sandhi colours** — corrected pinyin tones from real sandhi rules (3rd+3rd, 一/不) are highlighted in a distinct colour
 - **Per-track colour** — white, yellow, pink, blue, or green per track
 - **Font scale & position** — resize and reposition the overlay with sliders
 - **Stroke / Window / Shadow** — visual style toggles for readability

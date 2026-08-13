@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, cues, renderState } from './state.js';
 import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs } from './dom.js';
-import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderChinese, renderJapanese } from './lang.js';
+import { detectLang, loadDict, loadKuromoji, loadJaDict, getKuromoji, renderChinese, renderJapanese, getActiveLearnLang } from './lang.js';
 
 // ── Apply styles ───────────────────────────────────────────────────────────
 export function applyStyle() {
@@ -32,9 +32,10 @@ export function applyStyle() {
   /** @param {'zh'|'ja'|'en'} lang */
   const isCjk = (lang) => lang === 'zh' || lang === 'ja';
 
+  const activeLearnLang = getActiveLearnLang(cfg);
   const topNeedsRubyPad = cfg.pinyinEnabled && (
-    (topLang === 'zh' && cfg.learnMode === 'zh') ||
-    (topLang === 'ja' && cfg.learnMode === 'ja')
+    (topLang === 'zh' && activeLearnLang === 'zh') ||
+    (topLang === 'ja' && activeLearnLang === 'ja')
   );
   const topWinBg = cfg.window
     ? `background:rgba(0,0,0,0.5);padding:${topNeedsRubyPad ? '.25em' : '0'} 10px 0;border-radius:3px;`
@@ -151,29 +152,30 @@ export function tick() {
   if (cfg.track1 && !top && !cues.top.length) top = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
   if (cfg.track2 && !bottom && !cues.bottom.length) bottom = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
-  const effectivePinyin = (cfg.learnMode === 'zh' || cfg.learnMode === 'ja') && cfg.pinyinEnabled;
+  const activeLearnLang = getActiveLearnLang(cfg);
+  const effectivePinyin = (activeLearnLang === 'zh' || activeLearnLang === 'ja') && cfg.pinyinEnabled;
   const showPinyinChanged = effectivePinyin !== renderState.lastShowPinyin;
   if (showPinyinChanged) renderState.lastShowPinyin = effectivePinyin;
-  const effectiveSandhi = cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled;
+  const effectiveSandhi = activeLearnLang === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled;
   const toneSandhiChanged = effectiveSandhi !== renderState.lastSandhiEnabled;
   if (toneSandhiChanged) renderState.lastSandhiEnabled = effectiveSandhi;
 
-  if (cfg.learnMode === 'ja' && !getKuromoji()) loadKuromoji();
-  if (cfg.learnMode === 'ja') loadJaDict();
+  if (activeLearnLang === 'ja' && !getKuromoji()) loadKuromoji();
+  if (activeLearnLang === 'ja') loadJaDict();
 
   const topLang = detectLang(cfg.track1 || '');
   const bottomLang = detectLang(cfg.track2 || '');
 
   if (top !== renderState.lastTop || showPinyinChanged || toneSandhiChanged) {
     renderState.lastTop = top;
-    if (topLang === 'zh' && cfg.learnMode === 'zh') setHTML(topBox, renderChinese(top));
-    else if (topLang === 'ja' && cfg.learnMode === 'ja') setHTML(topBox, renderJapanese(top));
+    if (topLang === 'zh' && activeLearnLang === 'zh') setHTML(topBox, renderChinese(top));
+    else if (topLang === 'ja' && activeLearnLang === 'ja') setHTML(topBox, renderJapanese(top));
     else topBox.textContent = top;
   }
   if (bottom !== renderState.lastBottom || showPinyinChanged || toneSandhiChanged) {
     renderState.lastBottom = bottom;
-    if (bottomLang === 'zh' && cfg.learnMode === 'zh') setHTML(bottomBox, renderChinese(bottom));
-    else if (bottomLang === 'ja' && cfg.learnMode === 'ja') setHTML(bottomBox, renderJapanese(bottom));
+    if (bottomLang === 'zh' && activeLearnLang === 'zh') setHTML(bottomBox, renderChinese(bottom));
+    else if (bottomLang === 'ja' && activeLearnLang === 'ja') setHTML(bottomBox, renderJapanese(bottom));
     else bottomBox.textContent = bottom;
   }
 

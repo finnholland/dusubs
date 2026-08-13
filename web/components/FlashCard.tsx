@@ -45,8 +45,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {freestyle && hintLevel >= 2 && word.sentOther && (
               <p className="text-white/40 text-sm italic">{word.sentOther}</p>
             )}
-            {freestyle && hintLevel >= 3 && word.py && (
-              <span className="text-white/50 text-base">{word.py}</span>
+            {freestyle && hintLevel >= 3 && word.reading && (
+              <span className="text-white/50 text-base">{word.reading}</span>
             )}
             <span className="text-white/30 text-xs mt-4">tap to reveal</span>
           </>
@@ -55,8 +55,8 @@ export default function FlashCard({ word, onKnown, onUnknown, freestyle }: Props
             {displayWord && (
               <span className="text-yellow-400/80 text-3xl">{displayWord}</span>
             )}
-            {word.py && (
-              <span className="text-white/50 text-base">{word.py}</span>
+            {word.reading && (
+              <span className="text-white/50 text-base">{word.reading}</span>
             )}
             <span className="text-white text-xl">{word.en}</span>
             {word.sentOther && (

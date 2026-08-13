@@ -8,24 +8,30 @@ import {
   trackManuallySet, setTrackManuallySet,
 } from './content/state.js';
 import { topBox, bottomBox } from './content/dom.js';
-import { loadKuromoji, loadJaDict } from './content/lang.js';
+import { loadKuromoji, loadJaDict, getActiveLearnLang } from './content/lang.js';
 import { applyStyle, parseCues } from './content/render.js';
 import './content/tooltip.js';
 
+/** Loads kuromoji/ja-dict if the currently active learn language is Japanese. */
+function loadForActiveLang() {
+  if (getActiveLearnLang(cfg) === 'ja') { loadKuromoji(); loadJaDict(); }
+}
+
 // ── Settings ───────────────────────────────────────────────────────────────
-browser.storage.local.get({ ...DEFAULTS, savedWords: {}, zhTrack: null, enTrack: null, zhColor: null, enColor: null }).then(s => {
+browser.storage.local.get({ ...DEFAULTS, savedWords: {}, zhTrack: null, enTrack: null, zhColor: null, enColor: null, learnMode: undefined }).then(s => {
   // One-time migration: zhTrack/enTrack/zhColor/enColor → track1/track2/track1Color/track2Color
   const migrate = {};
   if (s.zhTrack !== null && !s.track1) { s.track1 = s.zhTrack; migrate.track1 = s.zhTrack; }
   if (s.enTrack !== null && !s.track2) { s.track2 = s.enTrack; migrate.track2 = s.enTrack; }
   if (s.zhColor !== null && s.track1Color === DEFAULTS.track1Color) { s.track1Color = s.zhColor; migrate.track1Color = s.zhColor; }
   if (s.enColor !== null && s.track2Color === DEFAULTS.track2Color) { s.track2Color = s.enColor; migrate.track2Color = s.enColor; }
+  // One-time migration: learnMode ('none'|'zh'|'ja') → learnEnabled boolean
   if (Object.keys(migrate).length) browser.storage.local.set(migrate);
   setCfg({ ...s, track1: DEFAULTS.track1, track2: DEFAULTS.track2 });
   LOG('cfg:', JSON.stringify(cfg));
   applyStyle();
   for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
-  if (cfg.learnMode === 'ja') { loadKuromoji(); loadJaDict(); }
+  loadForActiveLang();
 });
 
 browser.storage.onChanged.addListener((changes, area) => {
@@ -36,9 +42,9 @@ browser.storage.onChanged.addListener((changes, area) => {
       patchCfg({ [key]: changes[key].newValue });
     }
   }
-  if ('learnMode' in changes) {
+  if ('learnEnabled' in changes) {
     renderState.lastTop = ''; renderState.lastBottom = '';
-    if (changes.learnMode.newValue === 'ja') { loadKuromoji(); loadJaDict(); }
+    loadForActiveLang();
   }
   applyStyle();
 
@@ -114,7 +120,7 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (slot) parseCues(slot, msg.url);
   }
   if (msg.type === 'get-tab-config') {
-    sendResponse({ track1: cfg.track1, track2: cfg.track2, learnMode: cfg.learnMode, availableTracks: localTracks });
+    sendResponse({ track1: cfg.track1, track2: cfg.track2, learnEnabled: cfg.learnEnabled, availableTracks: localTracks });
     return true;
   }
   if (msg.type === 'set-track') {
@@ -126,6 +132,7 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (changed) {
       cues.top = []; cues.bottom = [];
       renderState.lastTop = ''; renderState.lastBottom = '';
+      loadForActiveLang();
       if (lastTrackUrls) fetchSubtitles(lastTrackUrls);
     }
     sendResponse({ ok: true });

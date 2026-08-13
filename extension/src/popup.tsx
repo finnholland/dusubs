@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
+import { getActiveLearnLang } from './content/detect-lang.js';
 import './popup.css';
 
 const browser: {
@@ -24,13 +25,13 @@ const browser: {
 } = (globalThis as any).browser ?? (globalThis as any).chrome;
 
 interface Track { languageCode: string; name: string; }
-interface SavedWord { char?: string; py: string; en: string; url?: string; language?: string; sentNative?: string; sentZh?: string; sentJa?: string; sentOther?: string; }
+interface SavedWord { char?: string; reading: string; en: string; url?: string; language?: string; sentNative?: string; sentZh?: string; sentJa?: string; sentOther?: string; }
 interface Settings {
   fontScale: number; subPosition: number;
   track1: string; track2: string;
   track1Color: string; track2Color: string;
   stroke: boolean; window: boolean; shadow: boolean;
-  learnMode: 'none' | 'zh' | 'ja';
+  learnEnabled: boolean;
   pinyinEnabled: boolean; sandhiEnabled: boolean;
 }
 
@@ -38,7 +39,7 @@ const DEFAULTS: Settings = {
   fontScale: 100, subPosition: 8, track1: '', track2: '',
   track1Color: '#ffffff', track2Color: '#ffe97a',
   stroke: true, window: false, shadow: false,
-  learnMode: 'none' as 'none' | 'zh' | 'ja', pinyinEnabled: true, sandhiEnabled: true,
+  learnEnabled: false, pinyinEnabled: true, sandhiEnabled: true,
 };
 
 const COLORS_ZH = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
@@ -142,9 +143,16 @@ function App() {
   const tabIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    type TabConfig = { track1: string; track2: string; learnMode: string; availableTracks: Track[] };
+    type TabConfig = { track1: string; track2: string; learnEnabled: boolean; availableTracks: Track[] };
 
-    browser.storage.local.get({ ...DEFAULTS, availableTracks: [] }).then(async data => {
+    browser.storage.local.get({ ...DEFAULTS, availableTracks: [], learnMode: undefined }).then(async data => {
+      // One-time migration: old 3-way learnMode ('none'|'zh'|'ja') → learnEnabled boolean
+      if (data.learnMode !== undefined) {
+        const migrated = data.learnMode !== 'none';
+        browser.storage.local.set({ learnEnabled: migrated });
+        data.learnEnabled = migrated;
+      }
+
       let tabConfig: TabConfig | null = null;
       try {
         const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -162,7 +170,7 @@ function App() {
         track2: tabConfig?.track2 ?? '',
         track1Color: data.track1Color, track2Color: data.track2Color,
         stroke: data.stroke, window: data.window, shadow: data.shadow,
-        learnMode: (tabConfig?.learnMode ?? data.learnMode ?? 'none') as 'none' | 'zh' | 'ja',
+        learnEnabled: tabConfig?.learnEnabled ?? data.learnEnabled ?? false,
         pinyinEnabled: data.pinyinEnabled ?? true,
         sandhiEnabled: data.sandhiEnabled ?? true,
       });
@@ -212,7 +220,7 @@ function App() {
   function exportAnki() {
     const lines = Object.values(words).map(w => {
       const word = w.char ?? '';
-      let back = `${escHtml(w.py)}<br>${escHtml(w.en)}`;
+      let back = `${escHtml(w.reading)}<br>${escHtml(w.en)}`;
       const sent = w.sentNative ?? w.sentZh ?? w.sentJa;
       if (w.sentOther || sent) {
         back += `<br><i>${escHtml([sent, w.sentOther].filter(Boolean).join(' · '))}</i>`;
@@ -225,7 +233,7 @@ function App() {
 
   function exportQuizlet() {
     const lines = Object.values(words).map(w =>
-      `${w.char ?? ''}\t${w.py} · ${w.en}`
+      `${w.char ?? ''}\t${w.reading} · ${w.en}`
     );
     downloadText(lines.join('\n'), 'saved-words-quizlet.txt');
     setExportOpen(false);
@@ -250,16 +258,12 @@ function App() {
     setExportOpen(o => !o);
   }
 
-  function cycleLearnMode() {
-    const next: 'none' | 'zh' | 'ja' =
-      s.learnMode === 'none' ? 'zh' :
-        s.learnMode === 'zh' ? 'ja' : 'none';
-    set('learnMode', next);
-  }
-  const learnLabel =
-    s.learnMode === 'none' ? 'Off' :
-      s.learnMode === 'zh' ? '中 Chinese' :
-        '日 Japanese';
+  const activeLearnLang = getActiveLearnLang({ learnEnabled: s.learnEnabled, track1: s.track1, track2: s.track2 });
+  const learnSubtitle =
+    !s.learnEnabled ? '(hover, definitions, saving, + more)' :
+      activeLearnLang === 'zh' ? '中 Chinese' :
+        activeLearnLang === 'ja' ? '日 Japanese' :
+          'select a Chinese or Japanese track';
   const { version } = browser.runtime.getManifest();
 
   const wordList = Object.values(words);
@@ -275,11 +279,11 @@ function App() {
         <div class="learn-row">
           <div className="learn-subtitle">
             <span class="learn-label">Learn mode</span>
-            {s.learnMode === 'none' && <span >(hover, definitions, saving, + more)</span>}
+            <span>{learnSubtitle}</span>
           </div>
-          <button class="learn-btn" onClick={cycleLearnMode}>{learnLabel}</button>
+          <Toggle id="tog-learn" checked={s.learnEnabled} onChange={v => set('learnEnabled', v)} />
         </div>
-        {s.learnMode === 'zh' && (
+        {s.learnEnabled && activeLearnLang === 'zh' && (
           <div class="toggle-sub">
             <div class="toggle-row">
               <label class="name" for="tog-pinyin">Pinyin</label>
@@ -291,7 +295,7 @@ function App() {
             </div>
           </div>
         )}
-        {s.learnMode === 'ja' && (
+        {s.learnEnabled && activeLearnLang === 'ja' && (
           <div class="toggle-sub">
             <div class="toggle-row">
               <label class="name" for="tog-pinyin">Furigana</label>
@@ -365,6 +369,11 @@ function App() {
       </div>
 
       <div class={`tab-panel${tab !== 'words' ? ' hidden' : ''}`}>
+        {wordList.length > 0 && (
+          <a id="study-now-btn" href="https://www.dusubs.com/study" target="_blank" title="Review your saved words as flashcards">
+            Study now
+          </a>
+        )}
         <div id="word-list">
           {wordList.length === 0
             ? <p class="no-words">Hover a word while watching to save it.</p>
@@ -374,7 +383,7 @@ function App() {
                 <div key={word} class="word-row">
                   <span class="word-zh">{word}</span>
                   <span class="word-meta">
-                    <div class="word-py">{w.py}</div>
+                    <div class="word-reading">{w.reading}</div>
                     <div class="word-en">{w.en}</div>
                   </span>
                   {w.url && (

@@ -1,7 +1,7 @@
 // @ts-check
 import { browser, LOG, cfg, savedZh, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
-import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang } from './lang.js';
+import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang, getActiveLearnLang } from './lang.js';
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
@@ -75,8 +75,9 @@ function saveWord(result) {
   const sep = location.href.includes('?') ? '&' : '?';
   const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
   const url = baseUrl + sep + 't=' + Math.floor(t);
-  const topIsLearning = detectLang(cfg.track1 || '') === cfg.learnMode;
-  const entry = { char: result.word, py: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: cfg.learnMode, leitnerBox: 1, lastReviewed: null, nextReview: null };
+  const activeLang = getActiveLearnLang(cfg);
+  const topIsLearning = detectLang(cfg.track1 || '') === activeLang;
+  const entry = { char: result.word, reading: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: activeLang, leitnerBox: 1, lastReviewed: null, nextReview: null };
   browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
     savedWords[result.word] = entry;
     return browser.storage.local.set({ savedWords });
@@ -102,9 +103,10 @@ function unsaveWord(result) {
 export function attachHover(box, trackFn, getLastText) {
   box.addEventListener('mouseover', (e) => {
     const track = trackFn();
-    if (cfg.learnMode === 'none' || !track || !track.startsWith(cfg.learnMode)) return;
+    const activeLang = getActiveLearnLang(cfg);
+    if (!activeLang || !track || !track.startsWith(activeLang)) return;
 
-    if (cfg.learnMode === 'ja') {
+    if (activeLang === 'ja') {
       const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
       if (!wordSpan) return;
       const jaDict = getJaDict();
