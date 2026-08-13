@@ -42,8 +42,8 @@ const DEFAULTS: Settings = {
   learnEnabled: false, pinyinEnabled: true, sandhiEnabled: true,
 };
 
-const COLORS_ZH = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
-const COLORS_EN = ['#ffe97a', '#ffffff', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
+const COLORS_TRACK1 = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
+const COLORS_TRACK2 = ['#ffffff', '#ffe97a', '#F6B8FF', '#a8d8ff', '#b8ffb8'];
 const COLOR_NAMES: Record<string, string> = {
   '#ffffff': 'White', '#ffe97a': 'Yellow', '#F6B8FF': 'Pink', '#a8d8ff': 'Blue', '#b8ffb8': 'Green',
 };
@@ -310,7 +310,7 @@ function App() {
             <select id="track1" value={s.track1} onChange={e => set('track1', (e.target as HTMLSelectElement).value)}>
               <TrackOptions tracks={tracks} />
             </select>
-            <ColorSelect id="track1-color" value={s.track1Color} colorOrder={COLORS_ZH} onChange={v => set('track1Color', v)} />
+            <ColorSelect id="track1-color" value={s.track1Color} colorOrder={COLORS_TRACK1} onChange={v => set('track1Color', v)} />
           </div>
         </div>
 
@@ -320,7 +320,7 @@ function App() {
             <select id="track2" value={s.track2} onChange={e => set('track2', (e.target as HTMLSelectElement).value)}>
               <TrackOptions tracks={tracks} />
             </select>
-            <ColorSelect id="track2-color" value={s.track2Color} colorOrder={COLORS_EN} onChange={v => set('track2Color', v)} />
+            <ColorSelect id="track2-color" value={s.track2Color} colorOrder={COLORS_TRACK2} onChange={v => set('track2Color', v)} />
           </div>
         </div>
 

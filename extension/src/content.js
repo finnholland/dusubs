@@ -2,7 +2,7 @@
 import {
   browser, CHANNEL, LOG, DEFAULTS,
   cfg, setCfg, patchCfg,
-  cues, renderState, savedZh,
+  cues, renderState, savedWords,
   lastTrackUrls, setLastTrackUrls,
   localTracks, setLocalTracks,
   trackManuallySet, setTrackManuallySet,
@@ -30,7 +30,7 @@ browser.storage.local.get({ ...DEFAULTS, savedWords: {}, zhTrack: null, enTrack:
   setCfg({ ...s, track1: DEFAULTS.track1, track2: DEFAULTS.track2 });
   LOG('cfg:', JSON.stringify(cfg));
   applyStyle();
-  for (const zh of Object.keys(s.savedWords || {})) savedZh.add(zh);
+  for (const word of Object.keys(s.savedWords || {})) savedWords.add(word);
   loadForActiveLang();
 });
 
@@ -51,8 +51,8 @@ browser.storage.onChanged.addListener((changes, area) => {
   if ('savedWords' in changes) {
     const oldKeys = new Set(Object.keys(changes.savedWords.oldValue || {}));
     const newKeys = new Set(Object.keys(changes.savedWords.newValue || {}));
-    for (const zh of oldKeys) if (!newKeys.has(zh)) savedZh.delete(zh);
-    for (const zh of newKeys) if (!oldKeys.has(zh)) savedZh.add(zh);
+    for (const word of oldKeys) if (!newKeys.has(word)) savedWords.delete(word);
+    for (const word of newKeys) if (!oldKeys.has(word)) savedWords.add(word);
   }
 });
 

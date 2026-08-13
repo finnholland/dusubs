@@ -42,7 +42,7 @@ export const renderState = {
 };
 
 /** @type {Set<string>} */
-export const savedZh = new Set();
+export const savedWords = new Set();
 
 /** @type {Record<string, string> | null} */
 export let lastTrackUrls = null;

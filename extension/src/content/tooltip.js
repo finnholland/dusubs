@@ -1,5 +1,5 @@
 // @ts-check
-import { browser, LOG, cfg, savedZh, renderState } from './state.js';
+import { browser, LOG, cfg, savedWords, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
 import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang, getActiveLearnLang } from './lang.js';
 
@@ -42,7 +42,7 @@ export function trimDefinition(en) {
 export function showTooltip(result, anchor) {
   clearTimeout(fadeTimer);
   fadeTimer = undefined;
-  const alreadySaved = savedZh.has(result.word);
+  const alreadySaved = savedWords.has(result.word);
 
   const wordDiv = document.createElement('div');
   wordDiv.className = 'hpf-tip-word';
@@ -61,7 +61,7 @@ export function showTooltip(result, anchor) {
   saveBtn.className = 'hpf-tip-save' + (alreadySaved ? ' saved' : '');
   saveBtn.textContent = alreadySaved ? 'Saved ✓' : 'Save word';
   saveBtn.addEventListener('click', () =>
-    savedZh.has(result.word) ? unsaveWord(result) : saveWord(result));
+    savedWords.has(result.word) ? unsaveWord(result) : saveWord(result));
 
   tooltip.replaceChildren(wordDiv, pinyinDiv, defsDiv, saveBtn);
   tooltip.classList.add('hpf-tip-visible');
@@ -82,7 +82,7 @@ function saveWord(result) {
     savedWords[result.word] = entry;
     return browser.storage.local.set({ savedWords });
   }).then(() => {
-    savedZh.add(result.word);
+    savedWords.add(result.word);
     const btn = tooltip.querySelector('.hpf-tip-save');
     if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); }
   }).catch(err => console.error('storage error:', err));
@@ -94,7 +94,7 @@ function unsaveWord(result) {
     delete savedWords[result.word];
     return browser.storage.local.set({ savedWords });
   }).then(() => {
-    savedZh.delete(result.word);
+    savedWords.delete(result.word);
     const btn = tooltip.querySelector('.hpf-tip-save');
     if (btn) { btn.textContent = 'Save word'; btn.classList.remove('saved'); }
   }).catch(err => console.error('storage error:', err));
