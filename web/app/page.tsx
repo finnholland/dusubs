@@ -1,9 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { useUser } from '../lib/auth';
-import SignInModal from '../components/SignInModal';
 
 function detectBrowser(): 'firefox' | 'chrome' | 'other' {
   if (typeof navigator === 'undefined') return 'other';
@@ -19,8 +16,6 @@ const STORE_URLS = {
 };
 
 export default function LandingPage() {
-  const { user } = useUser();
-  const [showSignIn, setShowSignIn] = useState(false);
   const browser = detectBrowser();
   const primaryStore = browser === 'firefox' ? 'firefox' : 'chrome';
   const secondaryStore = primaryStore === 'firefox' ? 'chrome' : 'firefox';
@@ -62,21 +57,6 @@ export default function LandingPage() {
             Install for {storeLabels[primaryStore]}
           </a>
         )}
-        {/* {user ? (
-          <Link
-            href="/dashboard"
-            className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-white/40 transition-colors"
-          >
-            Go to Dashboard
-          </Link>
-        ) : (
-          <button
-            onClick={() => setShowSignIn(true)}
-            className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-white/40 transition-colors cursor-pointer"
-          >
-            Sign in to sync words
-          </button>
-          )} */}
         <Link href="/dashboard" className="text-white/70 hover:text-white transition-colors">
           <button
             className="border border-white/20 text-white px-8 py-3 rounded-full hover:border-yellow-400 hover:text-yellow-400 transition-colors cursor-pointer"
@@ -85,7 +65,6 @@ export default function LandingPage() {
           </button>
         </Link>
       </div>
-      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
 
       {/* Feature grid */}
       <div className="grid sm:grid-cols-3 gap-6 w-full mt-4">

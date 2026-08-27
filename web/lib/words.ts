@@ -23,10 +23,10 @@ interface GetWordsOptions {
 }
 
 export async function getWords(
-  uid: string | null,
+  token: string | null,
   { language, after }: GetWordsOptions = {}
 ): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'none' }> {
-  if (!uid) {
+  if (!token) {
     const words = await getWordsFromExtension();
     if (words) {
       const filtered = language ? words.filter((w) => w.language === language) : words;
@@ -35,7 +35,7 @@ export async function getWords(
     return { words: [], lastDoc: null, source: 'none' };
   }
 
-  const ref = collection(getDb(), 'users', uid, 'words');
+  const ref = collection(getDb(), 'users', token, 'words');
   const constraints = [
     ...(language ? [where('language', '==', language)] : []),
     orderBy('savedAt', 'desc'),
@@ -50,32 +50,32 @@ export async function getWords(
 }
 
 export async function saveWord(
-  uid: string | null,
+  token: string | null,
   word: Omit<SavedWord, 'id'>
 ): Promise<string> {
-  if (!uid) {
+  if (!token) {
     saveWordToExtension(word);
     return word.char ?? word.en;
   }
-  const ref = collection(getDb(), 'users', uid, 'words');
+  const ref = collection(getDb(), 'users', token, 'words');
   const docRef = await addDoc(ref, word);
   return docRef.id;
 }
 
-export async function deleteWord(uid: string | null, wordId: string, key?: string): Promise<void> {
-  if (!uid) {
+export async function deleteWord(token: string | null, wordId: string, key?: string): Promise<void> {
+  if (!token) {
     if (key) deleteWordFromExtension(key);
     return;
   }
-  await deleteDoc(doc(getDb(), 'users', uid, 'words', wordId));
+  await deleteDoc(doc(getDb(), 'users', token, 'words', wordId));
 }
 
-export async function deleteAllWords(uid: string | null): Promise<void> {
-  if (!uid) {
+export async function deleteAllWords(token: string | null): Promise<void> {
+  if (!token) {
     deleteAllWordsFromExtension();
     return;
   }
-  const ref = collection(getDb(), 'users', uid, 'words');
+  const ref = collection(getDb(), 'users', token, 'words');
   const snap = await getDocs(query(ref));
   await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
 }

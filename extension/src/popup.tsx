@@ -16,6 +16,7 @@ const browser: {
   };
   runtime: {
     getManifest(): { version: string };
+    sendMessage(message: any): Promise<any>;
   };
   tabs: {
     query(queryInfo: { active: boolean; currentWindow: boolean }): Promise<Array<{ id?: number }>>;
@@ -139,6 +140,8 @@ function App() {
   const [words, setWords] = useState<Record<string, SavedWord>>({});
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [syncToken, setSyncTokenState] = useState('');
+  const [syncSaved, setSyncSaved] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tabIdRef = useRef<number | null>(null);
 
@@ -197,6 +200,17 @@ function App() {
     }
   }, [tab]);
 
+  useEffect(() => {
+    browser.storage.local.get({ syncToken: '' }).then(data => setSyncTokenState(data.syncToken));
+  }, []);
+
+  function saveSyncToken() {
+    const value = syncToken.trim().toLowerCase();
+    browser.storage.local.set({ syncToken: value || null });
+    setSyncSaved(true);
+    setTimeout(() => setSyncSaved(false), 1500);
+  }
+
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
     setS(prev => {
       const next = { ...prev, [key]: value };
@@ -215,6 +229,11 @@ function App() {
     delete next[key];
     setWords(next);
     browser.storage.local.set({ savedWords: next });
+    if (syncToken) {
+      browser.storage.local.get({ syncToken: null }).then(({ syncToken: token }) => {
+        if (token) browser.runtime.sendMessage({ type: 'dusubs-delete-word', token, id: key }).catch(() => {});
+      });
+    }
   }
 
   function exportAnki() {
@@ -353,6 +372,22 @@ function App() {
           <label class="name" for="tog-shadow">Shadow</label>
           <Toggle id="tog-shadow" checked={s.shadow} onChange={v => set('shadow', v)} />
         </div>
+
+        <hr class="divider" />
+
+        <div class="track-label">Sync token</div>
+        <div class="sync-row">
+          <input
+            id="sync-token"
+            type="text"
+            value={syncToken}
+            placeholder="quiet-tiger-orbit"
+            spellcheck={false}
+            onInput={e => setSyncTokenState((e.target as HTMLInputElement).value)}
+          />
+          <button class="sync-save-btn" onClick={saveSyncToken}>{syncSaved ? 'Saved' : 'Save'}</button>
+        </div>
+        <p class="sync-hint">Paste the token from dusubs.com/settings to sync words to your account.</p>
 
         <hr class="divider" />
         <div class="popup-footer">

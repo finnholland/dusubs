@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useUser } from '../../lib/auth';
+import { useSyncToken } from '../../lib/auth';
 import { getWords } from '../../lib/words';
 import FlashCard from '../../components/FlashCard';
 import { SavedWord } from '../../types';
@@ -37,7 +37,7 @@ type Status = 'loading' | 'selecting' | 'empty' | 'empty-lang' | 'caught-up' | '
 type SelectionMode = 'review' | 'freestyle';
 
 export default function StudyPage() {
-  const { user, loading } = useUser();
+  const { token, loading } = useSyncToken();
   const requeuedRef = useRef<Set<string>>(new Set());
   const studyLangRef = useRef<SavedWord['language'] | 'all'>('all');
 
@@ -86,7 +86,7 @@ export default function StudyPage() {
   };
 
   const backToList = () => {
-    getWords(user?.uid ?? null).then(({ words }) => {
+    getWords(token).then(({ words }) => {
       setAllWords(words);
       setStatus('selecting');
     });
@@ -100,11 +100,12 @@ export default function StudyPage() {
   };
 
   useEffect(() => {
-    getWords(user?.uid ?? null).then(({ words }) => {
+    if (loading) return;
+    getWords(token).then(({ words }) => {
       setAllWords(words);
       setStatus(words.length === 0 ? 'empty' : 'selecting');
     });
-  }, [user]);
+  }, [token, loading]);
 
   const advance = (known: boolean) => {
     const word = queue[index];

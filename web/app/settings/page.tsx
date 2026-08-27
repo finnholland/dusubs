@@ -1,28 +1,64 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { deleteDoc, doc, collection, getDocs } from 'firebase/firestore';
-import { useUser, getSyncToken } from '../../lib/auth';
+import { useSyncToken, linkToken, regenerateSyncToken, isValidToken } from '../../lib/auth';
 import { getDb } from '../../lib/firebase';
 import { deleteAllWordsFromExtension } from '@/lib/extension';
 
 export default function SettingsPage() {
-  const { user, loading } = useUser();
-  const [syncToken, setSyncToken] = useState<string | null>(null);
+  const { token: syncToken, loading } = useSyncToken();
+  const [tokenDraft, setTokenDraft] = useState('');
+  // Track the last syncToken we've synced tokenDraft from, so the draft
+  // picks up the generated/regenerated token exactly once per change
+  // without a useEffect (React's recommended pattern for "adjust state
+  // when a prop/derived value changes" — see react.dev/learn/you-might-not-need-an-effect).
+  const [syncedFrom, setSyncedFrom] = useState<string | null>(null);
+  if (syncToken && syncToken !== syncedFrom) {
+    setSyncedFrom(syncToken);
+    setTokenDraft(syncToken);
+  }
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [savingToken, setSavingToken] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<'local' | 'all' | null>(null);
-
-  useEffect(() => {
-    if (user) getSyncToken(user.uid).then(setSyncToken);
-  }, [user]);
 
   const copyToken = () => {
     if (!syncToken) return;
     navigator.clipboard.writeText(syncToken);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const saveTokenDraft = async () => {
+    if (tokenDraft === syncToken) return;
+    setTokenError(null);
+    if (!isValidToken(tokenDraft)) {
+      setTokenError('Lowercase letters and hyphens only, e.g. quiet-tiger-orbit.');
+      return;
+    }
+    setSavingToken(true);
+    try {
+      await linkToken(tokenDraft);
+    } catch (err) {
+      setTokenError(err instanceof Error ? err.message : 'Could not save token.');
+    } finally {
+      setSavingToken(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    setTokenError(null);
+    try {
+      const fresh = await regenerateSyncToken();
+      setTokenDraft(fresh);
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const promptDelete = (target: 'local' | 'all') => {
@@ -33,23 +69,12 @@ export default function SettingsPage() {
   const confirmDeleteAllWords = async () => {
     setShowDeleteModal(false);
     deleteAllWordsFromExtension();
-    if (deleteTarget === 'local' || !user) return;
+    if (deleteTarget === 'local' || !syncToken) return;
     setDeleting(true);
     const db = getDb();
-    const snap = await getDocs(collection(db, 'users', user.uid, 'words'));
-    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, 'users', user.uid, 'words', d.id))));
+    const snap = await getDocs(collection(db, 'users', syncToken, 'words'));
+    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, 'users', syncToken, 'words', d.id))));
     setDeleting(false);
-  };
-
-  const deleteAccount = async () => {
-    if (!user) return;
-    const confirmed = window.confirm(
-      'Delete your account and all data? This cannot be undone.'
-    );
-    if (!confirmed) return;
-    const db = getDb();
-    await deleteDoc(doc(db, 'users', user.uid, 'meta', 'syncToken'));
-    await user.delete();
   };
 
   if (loading) return null;
@@ -59,25 +84,37 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-semibold">Settings</h1>
 
       {/* Sync token */}
-      <section className={`flex flex-col gap-3 transition-opacity ${!user ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+      <section className="flex flex-col gap-3">
         <h2 className="text-white/80 font-medium">Extension Sync Token</h2>
         <p className="text-white/50 text-sm">
-          {user
-            ? 'Paste this token into the DuSubs extension popup to link your browser to this account.'
-            : 'Sign in to get a sync token and link the extension to your account.'}
+          A token was generated automatically for this browser. Paste it into the DuSubs extension popup (or any other device) to link your saved words — anyone with this token can access them, so treat it like a password. You can also paste a different token here to link to an existing one instead.
         </p>
         <div className="flex items-center gap-3">
-          <code className={`flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono break-all ${user ? 'text-yellow-400' : 'text-white/30 italic'}`}>
-            {user ? syncToken ?? 'Generating…' : 'Sign in to generate'}
-          </code>
+          <input
+            type="text"
+            value={tokenDraft}
+            onChange={(e) => setTokenDraft(e.target.value.toLowerCase())}
+            onBlur={saveTokenDraft}
+            placeholder={syncToken ?? 'Generating…'}
+            spellCheck={false}
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400"
+          />
           <button
             onClick={copyToken}
-            disabled={!user}
-            className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
+            className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer"
           >
             {copied ? 'Copied!' : 'Copy'}
           </button>
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
+          >
+            {regenerating ? 'Regenerating…' : 'Regenerate'}
+          </button>
         </div>
+        {savingToken && <p className="text-white/40 text-xs">Saving…</p>}
+        {tokenError && <p className="text-red-400 text-xs">{tokenError}</p>}
       </section>
       {/* Danger zone */}
       <section className="flex flex-col gap-3 border border-red-400/20 rounded-xl p-6">
@@ -90,21 +127,13 @@ export default function SettingsPage() {
           >
             {deleting ? 'Clearing…' : 'Clear words (extension)'}
           </button>
-          <div className={`${!user ? 'opacity-40 pointer-events-none select-none flex flex-col sm:flex-row gap-3' : ''}`}>
-            <button
-              onClick={() => promptDelete('all')}
-              disabled={deleting}
-              className="border border-red-400/40 text-red-400 px-5 py-2 rounded-full text-sm cursor-pointer hover:bg-red-400/10 transition-colors disabled:opacity-40"
-            >
-              {deleting ? 'Clearing…' : 'Clear words (ext + cloud)'}
-            </button>
-            <button
-              onClick={deleteAccount}
-              className="border border-red-400/40 text-red-400 px-5 py-2 rounded-full text-sm cursor-pointer hover:bg-red-400/10 transition-colors"
-            >
-              Delete account
-            </button>
-          </div>
+          <button
+            onClick={() => promptDelete('all')}
+            disabled={deleting}
+            className="border border-red-400/40 text-red-400 px-5 py-2 rounded-full text-sm cursor-pointer hover:bg-red-400/10 transition-colors disabled:opacity-40"
+          >
+            {deleting ? 'Clearing…' : 'Clear words (ext + cloud)'}
+          </button>
         </div>
       </section>
 

@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback, useReducer } from 'react';
 import { DocumentSnapshot } from 'firebase/firestore';
-import { useUser } from '../../lib/auth';
+import Link from 'next/link';
+import { useSyncToken } from '../../lib/auth';
 import { getWords, deleteWord, exportWords } from '../../lib/words';
 import WordCard from '../../components/WordCard';
 import LanguageFilter from '../../components/LanguageFilter';
 import { SavedWord } from '../../types';
-import SignInModal from '../../components/SignInModal';
 
 type ListState = {
   words: SavedWord[];
@@ -42,28 +42,27 @@ function listReducer(state: ListState, action: ListAction): ListState {
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useUser();
+  const { token, loading } = useSyncToken();
   const [language, setLanguage] = useState<SavedWord['language'] | 'all'>('all');
-  const [showSignIn, setShowSignIn] = useState(false);
   const [list, dispatch] = useReducer(listReducer, initialList);
 
   const load = useCallback(
     async (after: DocumentSnapshot | null) => {
       dispatch({ type: 'fetch_start' });
       const lang = language === 'all' ? undefined : language;
-      const result = await getWords(user?.uid ?? null, { language: lang, after: after ?? undefined });
+      const result = await getWords(token, { language: lang, after: after ?? undefined });
       dispatch({ type: 'fetch_done', words: result.words, lastDoc: result.lastDoc, source: result.source, append: after !== null });
     },
-    [user, language]
+    [token, language]
   );
 
   useEffect(() => {
     if (loading) return;
     load(null);
-  }, [user, language, loading, load]);
+  }, [token, language, loading, load]);
 
   const handleDelete = async (id: string, key?: string) => {
-    await deleteWord(user?.uid ?? null, id, key);
+    await deleteWord(token, id, key);
     dispatch({ type: 'delete', id });
   };
 
@@ -105,10 +104,10 @@ export default function DashboardPage() {
       {list.source === 'extension' && (
         <p className="text-white/50 text-sm text-center border border-white/10 rounded-xl py-3 px-4">
           Showing words from the extension.{' '}
-          <button
-            onClick={() => setShowSignIn(true)}
-            className="text-yellow-400 hover:underline">Sign in</button>
-          {' '}to sync across devices (coming soon).
+          <Link href="/settings" className="text-yellow-400 hover:underline">
+            Get a sync token in Settings
+          </Link>
+          {' '}to sync across devices.
         </p>
       )}
 
@@ -135,7 +134,6 @@ export default function DashboardPage() {
           {list.fetching ? 'Loading…' : 'Load more'}
         </button>
       )}
-      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
     </div>
   );
 }

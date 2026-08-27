@@ -70,6 +70,41 @@ body {
   cursor: pointer;
 }
 
+.sync-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.sync-row input {
+  flex: 1;
+  min-width: 0;
+  background: #252545;
+  color: #eee;
+  border: 1px solid #3a3a6a;
+  border-radius: 5px;
+  padding: 5px 6px;
+  font-size: 12px;
+}
+
+.sync-save-btn {
+  background: #3a5fd9;
+  color: #fff;
+  border: 1px solid #5577ff;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sync-hint {
+  font-size: 10px;
+  color: #888;
+  margin: 0 0 4px;
+  line-height: 1.4;
+}
+
 .color-select-wrap {
   position: relative;
   flex-shrink: 0;

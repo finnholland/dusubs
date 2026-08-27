@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// DuSubs sync model — no password/OAuth backend, "no real auth just a token".
+//
+// Two independent namespaces live under /users/{id}:
+//
+// 1. users/{uid}/**       — uid is a real Firebase Anonymous Auth uid.
+//                           Gated normally by request.auth.uid. Used only to
+//                           remember which sync token this browser session
+//                           currently owns (users/{uid}/meta/token).
+//
+// 2. users/{token}/**     — token is a human-chosen/generated string (e.g.
+//                           "quiet-tiger-orbit") copied from Settings into the
+//                           extension popup. This is a *capability token*:
+//                           anyone holding the exact token string gets full
+//                           read/write to that token's words, the same trust
+//                           model as an unguessable share link (no
+//                           request.auth check is possible or intended here,
+//                           since the browser extension has no Firebase auth
+//                           session at all — it calls the REST API directly
+//                           with the token as a path segment).
+//
+// Because both namespaces share the same /users/{id} collection, rules can't
+// tell which "kind" of id a given request is using — a real uid is
+// unguessable in the same way a token is, so allowing open access to
+// /users/{id}/** uniformly is intentional and does not weaken the uid-based
+// docs beyond "you must already know a specific anonymous uid to touch it",
+// which is equivalent to the token model.
+//
+// Users should be told (and are, in Settings) to treat their sync token like
+// a password: anyone who has it can read/delete their saved words.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{id}/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

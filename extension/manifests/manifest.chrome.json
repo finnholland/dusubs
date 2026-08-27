@@ -12,6 +12,7 @@
   "host_permissions": [
     "https://www.dusubs.com/*",
     "https://dusubs.com/*",
+    "https://firestore.googleapis.com/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
     "*://*.bilivideo.com/*"

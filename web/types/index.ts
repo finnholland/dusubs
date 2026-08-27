@@ -14,7 +14,7 @@ export interface SavedWord {
   nextReview: number | null;    // unix ms, null = not yet scheduled
 }
 
-export interface SyncToken {
-  token: string;
+// Stored at users/{token}/meta/account — existence marker for a sync token.
+export interface SyncTokenAccount {
   createdAt: number;
 }
