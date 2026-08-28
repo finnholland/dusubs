@@ -13,5 +13,9 @@
   globalThis.DUSUBS_CONFIG = {
     FIREBASE_PROJECT_ID,
     FIRESTORE_BASE_URL: `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`,
+    // Sync failures were previously silent (swallowed fetch errors, no
+    // logging), making "words aren't syncing" impossible to diagnose from a
+    // bug report. Keep this on until sync has been solid for a while.
+    SYNC_DEBUG: true,
   };
 })();

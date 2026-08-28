@@ -4,8 +4,11 @@
 /* global chrome */
 const browser = globalThis.browser ?? globalThis.chrome;
 
+console.log('[dusubs web-bridge] injected on', location.href);
+
 window.addEventListener('message', async (e) => {
   if (typeof e.data?.type !== 'string' || !e.data.type.startsWith('DUSUBS_')) return;
+  console.log('[dusubs web-bridge] received', e.data.type);
 
   if (e.data.type === 'DUSUBS_GET_WORDS') {
     try {
@@ -48,6 +51,8 @@ window.addEventListener('message', async (e) => {
   }
 
   if (e.data.type === 'DUSUBS_DELETE_ALL_WORDS') {
-    await browser.storage.local.clear();
+    // Only clear saved words — storage.local.clear() would also wipe
+    // settings and the sync token, silently unlinking the extension.
+    await browser.storage.local.set({ savedWords: {} });
   }
 });

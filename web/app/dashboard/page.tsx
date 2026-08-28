@@ -42,7 +42,12 @@ function listReducer(state: ListState, action: ListAction): ListState {
 }
 
 export default function DashboardPage() {
-  const { token, loading } = useSyncToken();
+  const { token, linked, loading } = useSyncToken();
+  // Only query Firestore once the user has actually linked this token (see
+  // useSyncToken) — otherwise a freshly-visited Dashboard would silently
+  // read a real-but-empty auto-generated cloud account instead of falling
+  // back to the extension's local words.
+  const effectiveToken = linked ? token : null;
   const [language, setLanguage] = useState<SavedWord['language'] | 'all'>('all');
   const [list, dispatch] = useReducer(listReducer, initialList);
 
@@ -50,19 +55,19 @@ export default function DashboardPage() {
     async (after: DocumentSnapshot | null) => {
       dispatch({ type: 'fetch_start' });
       const lang = language === 'all' ? undefined : language;
-      const result = await getWords(token, { language: lang, after: after ?? undefined });
+      const result = await getWords(effectiveToken, { language: lang, after: after ?? undefined });
       dispatch({ type: 'fetch_done', words: result.words, lastDoc: result.lastDoc, source: result.source, append: after !== null });
     },
-    [token, language]
+    [effectiveToken, language]
   );
 
   useEffect(() => {
     if (loading) return;
     load(null);
-  }, [token, language, loading, load]);
+  }, [effectiveToken, language, loading, load]);
 
   const handleDelete = async (id: string, key?: string) => {
-    await deleteWord(token, id, key);
+    await deleteWord(effectiveToken, id, key);
     dispatch({ type: 'delete', id });
   };
 

@@ -11,7 +11,14 @@
 // globalThis.DUSUBS_SYNC for background.js to call.
 (function () {
   const browser = globalThis.browser ?? globalThis.chrome;
-  const { FIRESTORE_BASE_URL } = globalThis.DUSUBS_CONFIG;
+  const { FIRESTORE_BASE_URL, SYNC_DEBUG } = globalThis.DUSUBS_CONFIG;
+
+  function log(...args) {
+    if (SYNC_DEBUG) console.log('[dusubs sync]', ...args);
+  }
+  function warn(...args) {
+    console.warn('[dusubs sync]', ...args);
+  }
 
   /** @param {Record<string, any>} word */
   function toFirestoreFields(word) {
@@ -47,9 +54,14 @@
 
   /** Fetches every cloud word for a token. Returns null on network failure. */
   async function fetchAllCloudWords(token) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words`;
     try {
-      const res = await fetch(`${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words`);
-      if (!res.ok) return null;
+      const res = await fetch(url);
+      log('fetchAllCloudWords', res.status, url);
+      if (!res.ok) {
+        warn('fetchAllCloudWords failed', res.status, await res.text().catch(() => ''));
+        return null;
+      }
       const data = await res.json();
       /** @type {Record<string, any>} */
       const words = {};
@@ -57,8 +69,10 @@
         const id = doc.name.split('/').pop();
         words[id] = { id, ...fromFirestoreFields(doc.fields) };
       }
+      log('fetchAllCloudWords got', Object.keys(words).length, 'words');
       return words;
-    } catch {
+    } catch (err) {
+      warn('fetchAllCloudWords threw', err);
       return null;
     }
   }
@@ -91,7 +105,11 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) return null;
+      log('fetchChangedCloudWords', res.status, url, 'since', sinceMs);
+      if (!res.ok) {
+        warn('fetchChangedCloudWords failed', res.status, await res.text().catch(() => ''));
+        return null;
+      }
       const rows = await res.json();
       /** @type {Record<string, any>} */
       const words = {};
@@ -100,8 +118,10 @@
         const id = row.document.name.split('/').pop();
         words[id] = { id, ...fromFirestoreFields(row.document.fields) };
       }
+      log('fetchChangedCloudWords got', Object.keys(words).length, 'changed words');
       return words;
-    } catch {
+    } catch (err) {
+      warn('fetchChangedCloudWords threw', err);
       return null;
     }
   }
@@ -110,27 +130,47 @@
   async function pushWord(token, id, word) {
     const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words/${encodeURIComponent(id)}`;
     const withStamp = { ...word, updatedAt: Date.now() };
-    await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: toFirestoreFields(withStamp) }),
-    }).catch(() => {});
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: toFirestoreFields(withStamp) }),
+      });
+      log('pushWord', id, res.status, url);
+      if (!res.ok) {
+        warn('pushWord failed', id, res.status, await res.text().catch(() => ''));
+      }
+    } catch (err) {
+      warn('pushWord threw', id, err);
+    }
   }
 
   async function deleteCloudWord(token, id) {
     const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words/${encodeURIComponent(id)}`;
-    await fetch(url, { method: 'DELETE' }).catch(() => {});
+    try {
+      const res = await fetch(url, { method: 'DELETE' });
+      log('deleteCloudWord', id, res.status);
+      if (!res.ok) warn('deleteCloudWord failed', id, res.status, await res.text().catch(() => ''));
+    } catch (err) {
+      warn('deleteCloudWord threw', id, err);
+    }
   }
 
   async function ensureAccountDoc(token) {
     const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/meta/account`;
-    const res = await fetch(url);
-    if (res.ok) return;
-    await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { createdAt: { integerValue: String(Date.now()) } } }),
-    }).catch(() => {});
+    try {
+      const res = await fetch(url);
+      if (res.ok) { log('ensureAccountDoc: already exists', token); return; }
+      const createRes = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { createdAt: { integerValue: String(Date.now()) } } }),
+      });
+      log('ensureAccountDoc: created', token, createRes.status);
+      if (!createRes.ok) warn('ensureAccountDoc create failed', createRes.status, await createRes.text().catch(() => ''));
+    } catch (err) {
+      warn('ensureAccountDoc threw', err);
+    }
   }
 
   function localTimestamp(word) {
@@ -153,22 +193,28 @@
    * deleted. Acceptable for v1 given the low write volume.
    */
   async function syncWords(token) {
-    if (!token) return;
+    if (!token) { log('syncWords: no token, skipping'); return; }
     const cycleStart = Date.now();
+    log('syncWords: starting cycle for token', token);
     await ensureAccountDoc(token);
 
     const { savedWords = {}, lastSyncedAt = null } = await browser.storage.local.get({ savedWords: {}, lastSyncedAt: null });
+    log('syncWords: local savedWords count', Object.keys(savedWords).length, 'lastSyncedAt', lastSyncedAt);
 
     const cloudWords = lastSyncedAt === null
       ? await fetchAllCloudWords(token)
       : await fetchChangedCloudWords(token, lastSyncedAt);
-    if (cloudWords === null) return; // offline / token invalid — skip this cycle, keep old watermark
+    if (cloudWords === null) {
+      warn('syncWords: cloud fetch failed, skipping this cycle (watermark unchanged)');
+      return;
+    }
 
     const merged = { ...savedWords };
     const pushes = [];
     const localWords = lastSyncedAt === null
       ? Object.entries(savedWords)
       : Object.entries(savedWords).filter(([, w]) => localTimestamp(w) > lastSyncedAt);
+    log('syncWords: candidate local words to push', localWords.length);
 
     for (const [id, local] of localWords) {
       const cloud = cloudWords[id];
@@ -191,6 +237,7 @@
 
     await Promise.all(pushes);
     await browser.storage.local.set({ savedWords: merged, lastSyncedAt: cycleStart });
+    log('syncWords: cycle done —', pushes.length, 'pushed,', Object.keys(merged).length, 'total words, new watermark', cycleStart);
   }
 
   async function pushDeletedWord(token, id) {

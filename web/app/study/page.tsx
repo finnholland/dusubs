@@ -37,7 +37,10 @@ type Status = 'loading' | 'selecting' | 'empty' | 'empty-lang' | 'caught-up' | '
 type SelectionMode = 'review' | 'freestyle';
 
 export default function StudyPage() {
-  const { token, loading } = useSyncToken();
+  const { token, linked, loading } = useSyncToken();
+  // See dashboard/page.tsx: only read from Firestore once the token is
+  // actually linked, otherwise fall back to the extension's local words.
+  const effectiveToken = linked ? token : null;
   const requeuedRef = useRef<Set<string>>(new Set());
   const studyLangRef = useRef<SavedWord['language'] | 'all'>('all');
 
@@ -86,7 +89,7 @@ export default function StudyPage() {
   };
 
   const backToList = () => {
-    getWords(token).then(({ words }) => {
+    getWords(effectiveToken).then(({ words }) => {
       setAllWords(words);
       setStatus('selecting');
     });
@@ -101,11 +104,11 @@ export default function StudyPage() {
 
   useEffect(() => {
     if (loading) return;
-    getWords(token).then(({ words }) => {
+    getWords(effectiveToken).then(({ words }) => {
       setAllWords(words);
       setStatus(words.length === 0 ? 'empty' : 'selecting');
     });
-  }, [token, loading]);
+  }, [effectiveToken, loading]);
 
   const advance = (known: boolean) => {
     const word = queue[index];

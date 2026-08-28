@@ -5,6 +5,14 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getDb } from './firebase';
 
 const STORAGE_KEY = 'dusubs_syncToken';
+// Separate from STORAGE_KEY: a token is generated automatically for every
+// browser on first visit (see useSyncToken) purely so Settings has something
+// to show/copy. That auto-generated token must NOT make Dashboard/Study
+// switch to querying Firestore — they'd hit a real but empty cloud account
+// and report "no words" even though the extension has words locally. Only
+// mark the token "linked" once the user has actually opted in: pasting it
+// into the extension, saving/confirming it, or regenerating it in Settings.
+const LINKED_KEY = 'dusubs_syncLinked';
 
 const TOKEN_WORDS = [
   'quiet', 'tiger', 'orbit', 'maple', 'river', 'ember', 'cloud', 'stone',
@@ -31,6 +39,24 @@ export function getLocalToken(): string | null {
 
 function setLocalToken(token: string): void {
   window.localStorage.setItem(STORAGE_KEY, token);
+}
+
+export function isLinked(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(LINKED_KEY) === '1';
+}
+
+function markLinked(): void {
+  window.localStorage.setItem(LINKED_KEY, '1');
+}
+
+/**
+ * Marks the current (possibly still auto-generated) token as linked, without
+ * changing it. Call this at the point the user takes the token somewhere
+ * they'll use it for real — e.g. copying it to paste into the extension.
+ */
+export function markCurrentTokenLinked(): void {
+  markLinked();
 }
 
 /** True if `users/{token}/meta/account` already exists. */
@@ -72,24 +98,35 @@ export async function linkToken(token: string): Promise<void> {
     await createAccountDoc(token);
   }
   setLocalToken(token);
+  markLinked();
 }
 
 /** Generates a brand-new random token, abandoning the old one's data. */
 export async function regenerateSyncToken(): Promise<string> {
   const token = await generateToken();
   setLocalToken(token);
+  markLinked();
   return token;
 }
 
 /**
  * Returns this browser's sync token, generating one automatically on first
- * use. No sign-in step — the token itself is the only credential.
+ * use so Settings always has something to show/copy. No sign-in step — the
+ * token itself is the only credential.
+ *
+ * `linked` is false until the user actually opts in (pasting the token into
+ * the extension, saving it, or regenerating it via Settings). Callers that
+ * decide where to read words from (Dashboard, Study) must pass `null` to
+ * getWords() when `linked` is false, rather than the auto-generated token —
+ * otherwise every fresh browser would silently query a real-but-empty
+ * Firestore account instead of falling back to the extension's local words.
  */
 export function useSyncToken() {
   // Lazy initializer reads localStorage synchronously up front, so the
   // effect below only has async work (and thus setState) to do when no
   // token exists yet — avoids a synchronous setState in the effect body.
   const [token, setToken] = useState<string | null>(() => getLocalToken());
+  const [linked, setLinked] = useState(() => isLinked());
   const [loading, setLoading] = useState(() => getLocalToken() === null);
 
   useEffect(() => {
@@ -104,5 +141,14 @@ export function useSyncToken() {
     return () => { cancelled = true; };
   }, [token]);
 
-  return { token, loading };
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === LINKED_KEY) setLinked(isLinked());
+      if (e.key === STORAGE_KEY) setToken(getLocalToken());
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  return { token, linked, loading };
 }

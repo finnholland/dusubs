@@ -6,8 +6,24 @@ const browser = globalThis.browser ?? globalThis.chrome;
 // sibling scripts; Firefox MV2 loads config.js/sync.js separately via the
 // "scripts" array in manifest.firefox.json, so importScripts is unavailable
 // there (and unnecessary — the manifest guarantees load order instead).
+//
+// If this throws, the whole service worker fails to load and NONE of the
+// listeners below register — sync would then silently never run with no
+// error visible anywhere except this console. Wrapped so that failure is at
+// least logged instead of vanishing.
 if (typeof importScripts === 'function') {
-  importScripts('config.js', 'sync.js');
+  try {
+    importScripts('config.js', 'sync.js');
+    console.log('[dusubs bg] config.js + sync.js loaded');
+  } catch (err) {
+    console.error('[dusubs bg] importScripts failed — sync is disabled', err);
+  }
+}
+
+console.log('[dusubs bg] background.js executing, instance', Math.random().toString(36).slice(2, 8));
+
+if (!globalThis.DUSUBS_SYNC) {
+  console.error('[dusubs bg] DUSUBS_SYNC missing after load — sync.js did not initialize correctly');
 }
 
 const SYNC_ALARM = 'dusubs-sync';
@@ -15,11 +31,15 @@ let syncInFlight = false;
 let syncQueued = false;
 
 async function runSync() {
+  if (!globalThis.DUSUBS_SYNC) { console.error('[dusubs bg] runSync: DUSUBS_SYNC unavailable, skipping'); return; }
   if (syncInFlight) { syncQueued = true; return; }
   syncInFlight = true;
   try {
     const { syncToken } = await browser.storage.local.get({ syncToken: null });
+    console.log('[dusubs bg] runSync triggered, token present:', !!syncToken);
     if (syncToken) await globalThis.DUSUBS_SYNC.syncWords(syncToken);
+  } catch (err) {
+    console.error('[dusubs bg] runSync threw', err);
   } finally {
     syncInFlight = false;
     if (syncQueued) { syncQueued = false; runSync(); }
@@ -29,15 +49,22 @@ async function runSync() {
 // Sync shortly after startup, whenever the token or local words change
 // (debounced against sync's own writes via the in-flight guard above), and
 // periodically in the background (alarms survive service-worker suspension;
-// setInterval does not).
+// setInterval does not — requires the "alarms" permission in the manifest).
 runSync();
-browser.alarms?.create(SYNC_ALARM, { periodInMinutes: 5 });
-browser.alarms?.onAlarm.addListener((alarm) => {
-  if (alarm.name === SYNC_ALARM) runSync();
-});
+if (browser.alarms) {
+  browser.alarms.create(SYNC_ALARM, { periodInMinutes: 5 });
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === SYNC_ALARM) runSync();
+  });
+} else {
+  console.error('[dusubs bg] browser.alarms unavailable — is the "alarms" permission missing from the manifest?');
+}
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  if ('syncToken' in changes || 'savedWords' in changes) runSync();
+  if ('syncToken' in changes || 'savedWords' in changes) {
+    console.log('[dusubs bg] storage changed:', Object.keys(changes).join(', '));
+    runSync();
+  }
 });
 
 /**

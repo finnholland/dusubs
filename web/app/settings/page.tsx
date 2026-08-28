@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { deleteDoc, doc, collection, getDocs } from 'firebase/firestore';
-import { useSyncToken, linkToken, regenerateSyncToken, isValidToken } from '../../lib/auth';
+import { useSyncToken, linkToken, regenerateSyncToken, isValidToken, markCurrentTokenLinked } from '../../lib/auth';
 import { getDb } from '../../lib/firebase';
 import { deleteAllWordsFromExtension } from '@/lib/extension';
 
 export default function SettingsPage() {
-  const { token: syncToken, loading } = useSyncToken();
+  const { token: syncToken, linked, loading } = useSyncToken();
   const [tokenDraft, setTokenDraft] = useState('');
   // Track the last syncToken we've synced tokenDraft from, so the draft
   // picks up the generated/regenerated token exactly once per change
@@ -29,6 +29,10 @@ export default function SettingsPage() {
   const copyToken = () => {
     if (!syncToken) return;
     navigator.clipboard.writeText(syncToken);
+    // Copying is the moment the user takes this token to actually use it
+    // (pasting into the extension) — commit to it as the linked token so
+    // Dashboard/Study start reading from Firestore instead of the extension.
+    markCurrentTokenLinked();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -89,6 +93,11 @@ export default function SettingsPage() {
         <p className="text-white/50 text-sm">
           A token was generated automatically for this browser. Paste it into the DuSubs extension popup (or any other device) to link your saved words — anyone with this token can access them, so treat it like a password. You can also paste a different token here to link to an existing one instead.
         </p>
+        {!linked && (
+          <p className="text-yellow-400/80 text-xs">
+            Not linked yet — copy the token below and paste it into the extension to start syncing.
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <input
             type="text"
