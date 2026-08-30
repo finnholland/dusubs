@@ -1,52 +1,66 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { deleteDoc, doc, collection, getDocs } from 'firebase/firestore';
-import { useSyncToken, linkToken, regenerateSyncToken, isValidToken, markCurrentTokenLinked } from '../../lib/auth';
+import { useSyncToken, linkToken, unlinkToken, isValidToken } from '../../lib/auth';
 import { getDb } from '../../lib/firebase';
-import { deleteAllWordsFromExtension } from '@/lib/extension';
+import { deleteAllWordsFromExtension, getExtensionSyncToken, requestSyncNow } from '@/lib/extension';
+
+type SyncNowState = 'idle' | 'syncing' | 'synced';
 
 export default function SettingsPage() {
   const { token: syncToken, linked, loading } = useSyncToken();
   const [tokenDraft, setTokenDraft] = useState('');
-  // Track the last syncToken we've synced tokenDraft from, so the draft
-  // picks up the generated/regenerated token exactly once per change
-  // without a useEffect (React's recommended pattern for "adjust state
-  // when a prop/derived value changes" — see react.dev/learn/you-might-not-need-an-effect).
-  const [syncedFrom, setSyncedFrom] = useState<string | null>(null);
-  if (syncToken && syncToken !== syncedFrom) {
-    setSyncedFrom(syncToken);
-    setTokenDraft(syncToken);
-  }
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [linkNotice, setLinkNotice] = useState<string | null>(null);
   const [savingToken, setSavingToken] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<'local' | 'all' | null>(null);
 
-  const copyToken = () => {
+  // Same-browser convenience: does the extension installed here have this
+  // exact token linked too? Only then is an immediate "Sync now" safe/useful
+  // — otherwise syncing happens on its own via the extension's background
+  // alarm / on-change sync once it picks up the code.
+  const [extensionToken, setExtensionToken] = useState<string | null | undefined>(undefined);
+  const [syncNow, setSyncNow] = useState<SyncNowState>('idle');
+
+  useEffect(() => {
+    if (!linked || !syncToken) return;
+    let cancelled = false;
+    getExtensionSyncToken().then((t) => {
+      if (!cancelled) setExtensionToken(t);
+    });
+    return () => { cancelled = true; };
+  }, [linked, syncToken]);
+
+  const canSyncNow = linked && !!syncToken && extensionToken === syncToken;
+
+  const handleSyncNow = () => {
     if (!syncToken) return;
-    navigator.clipboard.writeText(syncToken);
-    // Copying is the moment the user takes this token to actually use it
-    // (pasting into the extension) — commit to it as the linked token so
-    // Dashboard/Study start reading from Firestore instead of the extension.
-    markCurrentTokenLinked();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setSyncNow('syncing');
+    requestSyncNow(syncToken);
+    setTimeout(() => setSyncNow('synced'), 800);
+    setTimeout(() => setSyncNow('idle'), 2500);
   };
 
   const saveTokenDraft = async () => {
-    if (tokenDraft === syncToken) return;
+    if (!tokenDraft) return;
     setTokenError(null);
+    setLinkNotice(null);
     if (!isValidToken(tokenDraft)) {
       setTokenError('Lowercase letters and hyphens only, e.g. quiet-tiger-orbit.');
       return;
     }
     setSavingToken(true);
     try {
-      await linkToken(tokenDraft);
+      const { found } = await linkToken(tokenDraft);
+      setLinkNotice(
+        found
+          ? 'Linked — found existing words for this code.'
+          : "Linked — no data found yet for this code. It'll appear once the extension syncs it."
+      );
+      setTokenDraft('');
     } catch (err) {
       setTokenError(err instanceof Error ? err.message : 'Could not save token.');
     } finally {
@@ -54,15 +68,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRegenerate = async () => {
-    setRegenerating(true);
-    setTokenError(null);
-    try {
-      const fresh = await regenerateSyncToken();
-      setTokenDraft(fresh);
-    } finally {
-      setRegenerating(false);
-    }
+  const handleUnlink = () => {
+    unlinkToken();
+    setExtensionToken(undefined);
+    setSyncNow('idle');
+    setLinkNotice(null);
   };
 
   const promptDelete = (target: 'local' | 'all') => {
@@ -91,38 +101,63 @@ export default function SettingsPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-white/80 font-medium">Extension Sync Token</h2>
         <p className="text-white/50 text-sm">
-          A token was generated automatically for this browser. Paste it into the DuSubs extension popup (or any other device) to link your saved words — anyone with this token can access them, so treat it like a password. You can also paste a different token here to link to an existing one instead.
+          Generate a code in the DuSubs extension popup, then paste it here to link this device — anyone with this code can access your saved words, so treat it like a password.
         </p>
-        {!linked && (
-          <p className="text-yellow-400/80 text-xs">
-            Not linked yet — copy the token below and paste it into the extension to start syncing.
-          </p>
+
+        {linked && syncToken ? (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400">
+                {syncToken}
+              </div>
+              {canSyncNow && (
+                <button
+                  onClick={handleSyncNow}
+                  disabled={syncNow === 'syncing'}
+                  className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {syncNow === 'syncing' ? 'Syncing…' : syncNow === 'synced' ? 'Synced' : 'Sync now'}
+                </button>
+              )}
+              <button
+                onClick={handleUnlink}
+                className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-red-400/40 hover:text-red-400 transition-colors shrink-0 cursor-pointer"
+              >
+                Unlink this device
+              </button>
+            </div>
+            {linkNotice && <p className="text-white/60 text-xs">{linkNotice}</p>}
+            {!canSyncNow && (
+              <p className="text-white/40 text-xs">
+                Words will appear here once the extension picks up this code (it syncs automatically in the background).
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                value={tokenDraft}
+                onChange={(e) => setTokenDraft(e.target.value.toLowerCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveTokenDraft(); }}
+                placeholder="quiet-tiger-orbit — paste the code from the extension"
+                spellCheck={false}
+                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400 placeholder:text-white/30 placeholder:font-sans"
+              />
+              <button
+                onClick={saveTokenDraft}
+                disabled={savingToken || !tokenDraft}
+                className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {savingToken ? 'Linking…' : 'Link'}
+              </button>
+            </div>
+            <p className="text-yellow-400/80 text-xs">
+              Not linked yet — open the extension popup, hit Generate, then paste the code above.
+            </p>
+          </>
         )}
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={tokenDraft}
-            onChange={(e) => setTokenDraft(e.target.value.toLowerCase())}
-            onBlur={saveTokenDraft}
-            placeholder={syncToken ?? 'Generating…'}
-            spellCheck={false}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400"
-          />
-          <button
-            onClick={copyToken}
-            className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-          <button
-            onClick={handleRegenerate}
-            disabled={regenerating}
-            className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
-          >
-            {regenerating ? 'Regenerating…' : 'Regenerate'}
-          </button>
-        </div>
-        {savingToken && <p className="text-white/40 text-xs">Saving…</p>}
         {tokenError && <p className="text-red-400 text-xs">{tokenError}</p>}
       </section>
       {/* Danger zone */}

@@ -26,6 +26,7 @@ window.addEventListener('message', async (e) => {
     const { savedWords } = await browser.storage.local.get({ savedWords: {} });
     savedWords[wordKey] = {
       ...word,
+      savedAt: word.savedAt ?? Date.now(),
       leitnerBox: word.leitnerBox ?? 1,
       lastReviewed: word.lastReviewed ?? null,
       nextReview: word.nextReview ?? null,
@@ -54,5 +55,20 @@ window.addEventListener('message', async (e) => {
     // Only clear saved words — storage.local.clear() would also wipe
     // settings and the sync token, silently unlinking the extension.
     await browser.storage.local.set({ savedWords: {} });
+  }
+
+  if (e.data.type === 'DUSUBS_GET_SYNC_TOKEN') {
+    try {
+      const { syncToken } = await browser.storage.local.get({ syncToken: null });
+      window.postMessage({ type: 'DUSUBS_SYNC_TOKEN', token: syncToken }, '*');
+    } catch (err) {
+      window.postMessage({ type: 'DUSUBS_SYNC_TOKEN', token: null }, '*');
+    }
+  }
+
+  if (e.data.type === 'DUSUBS_SYNC_NOW') {
+    const token = e.data.token;
+    if (!token) return;
+    browser.runtime.sendMessage({ type: 'dusubs-sync-now', token });
   }
 });

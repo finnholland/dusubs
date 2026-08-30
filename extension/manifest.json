@@ -8,7 +8,6 @@
     "tabs",
     "storage",
     "webRequest",
-    "alarms",
     "https://www.dusubs.com/*",
     "https://dusubs.com/*",
     "https://firestore.googleapis.com/*",

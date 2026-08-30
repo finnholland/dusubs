@@ -201,6 +201,16 @@
     const { savedWords = {}, lastSyncedAt = null } = await browser.storage.local.get({ savedWords: {}, lastSyncedAt: null });
     log('syncWords: local savedWords count', Object.keys(savedWords).length, 'lastSyncedAt', lastSyncedAt);
 
+    // Backfill: words saved before savedAt was stamped at save-time would
+    // otherwise never match Firestore's `orderBy('savedAt')` dashboard query
+    // (Firestore excludes docs missing the ordered-on field entirely) —
+    // treat them as saved now so they become visible on next push.
+    let backfilled = false;
+    for (const w of Object.values(savedWords)) {
+      if (w.savedAt == null) { w.savedAt = Date.now(); backfilled = true; }
+    }
+    if (backfilled) await browser.storage.local.set({ savedWords });
+
     const cloudWords = lastSyncedAt === null
       ? await fetchAllCloudWords(token)
       : await fetchChangedCloudWords(token, lastSyncedAt);

@@ -38,7 +38,13 @@ export async function getWords(
   const ref = collection(getDb(), 'users', token, 'words');
   const constraints = [
     ...(language ? [where('language', '==', language)] : []),
-    orderBy('savedAt', 'desc'),
+    // Order by updatedAt, not savedAt: every doc gets updatedAt stamped
+    // unconditionally on every push (see sync.js pushWord), so it's
+    // guaranteed present. savedAt wasn't stamped by older extension builds
+    // (fixed going forward, see tooltip.js/web-bridge.js), and Firestore
+    // excludes any doc missing the field being ordered on — querying by it
+    // would silently return zero results for words synced before that fix.
+    orderBy('updatedAt', 'desc'),
     limit(PAGE_SIZE),
     ...(after ? [startAfter(after)] : []),
   ];
@@ -79,7 +85,10 @@ export async function saveWord(
     return word.char ?? word.en;
   }
   const ref = collection(getDb(), 'users', token, 'words');
-  const docRef = await addDoc(ref, word);
+  // Stamp updatedAt directly (rather than relying on the extension's sync
+  // cycle to add it later) — this doc is written straight to Firestore, so
+  // nothing else will set the field the dashboard query orders by.
+  const docRef = await addDoc(ref, { ...word, updatedAt: Date.now() });
   return docRef.id;
 }
 

@@ -96,3 +96,53 @@ export function deleteAllWordsFromExtension(): void {
 export function updateWordInExtension(key: string, patch: Partial<Pick<SavedWord, 'leitnerBox' | 'lastReviewed' | 'nextReview'>>): void {
   window.postMessage({ type: 'DUSUBS_UPDATE_WORD', key, patch }, '*');
 }
+
+/**
+ * Returns the sync token currently linked in the extension installed in
+ * *this* browser, or null if there's no extension (or it has none linked).
+ * Same retry pattern as getWordsFromExtension, to survive the content
+ * script still injecting on a fresh navigation.
+ */
+export function getExtensionSyncToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  const retryDelaysMs = [300, 600, 1200];
+
+  return new Promise((resolve) => {
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    function handler(e: MessageEvent) {
+      if (e.data?.type !== 'DUSUBS_SYNC_TOKEN') return;
+      clearTimeout(timer);
+      window.removeEventListener('message', handler);
+      resolve(e.data.token ?? null);
+    }
+
+    function attemptRequest() {
+      window.postMessage({ type: 'DUSUBS_GET_SYNC_TOKEN' }, '*');
+      timer = setTimeout(() => {
+        if (attempt < retryDelaysMs.length) {
+          attempt++;
+          attemptRequest();
+        } else {
+          window.removeEventListener('message', handler);
+          resolve(null);
+        }
+      }, retryDelaysMs[attempt]);
+    }
+
+    window.addEventListener('message', handler);
+    attemptRequest();
+  });
+}
+
+/**
+ * Fire-and-forget: asks the extension to run its sync cycle immediately for
+ * `token`. Only call this once the caller has already confirmed `token`
+ * matches the extension's own linked token — the extension re-checks this
+ * itself too (defense in depth), but the page shouldn't offer the button
+ * otherwise.
+ */
+export function requestSyncNow(token: string): void {
+  window.postMessage({ type: 'DUSUBS_SYNC_NOW', token }, '*');
+}

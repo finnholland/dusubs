@@ -77,7 +77,7 @@ function saveWord(result) {
   const url = baseUrl + sep + 't=' + Math.floor(t);
   const activeLang = getActiveLearnLang(cfg);
   const topIsLearning = detectLang(cfg.track1 || '') === activeLang;
-  const entry = { char: result.word, reading: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: activeLang, leitnerBox: 1, lastReviewed: null, nextReview: null };
+  const entry = { char: result.word, reading: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: activeLang, savedAt: Date.now(), leitnerBox: 1, lastReviewed: null, nextReview: null };
   browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
     savedWords[result.word] = entry;
     return browser.storage.local.set({ savedWords });

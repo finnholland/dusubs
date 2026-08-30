@@ -1,35 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { getDb } from './firebase';
 
 const STORAGE_KEY = 'dusubs_syncToken';
-// Separate from STORAGE_KEY: a token is generated automatically for every
-// browser on first visit (see useSyncToken) purely so Settings has something
-// to show/copy. That auto-generated token must NOT make Dashboard/Study
-// switch to querying Firestore — they'd hit a real but empty cloud account
-// and report "no words" even though the extension has words locally. Only
-// mark the token "linked" once the user has actually opted in: pasting it
-// into the extension, saving/confirming it, or regenerating it in Settings.
+// Separate from STORAGE_KEY: web never mints a token itself (the extension
+// does, via its popup's Generate button). A token only lands here once the
+// user pastes it in and links it — `linked` tracks that opt-in so
+// Dashboard/Study know when it's safe to query Firestore for it.
 const LINKED_KEY = 'dusubs_syncLinked';
-
-const TOKEN_WORDS = [
-  'quiet', 'tiger', 'orbit', 'maple', 'river', 'ember', 'cloud', 'stone',
-  'amber', 'birch', 'coral', 'delta', 'ferry', 'grove', 'haven', 'ivory',
-  'jetty', 'karma', 'lemon', 'medal', 'noble', 'olive', 'pearl', 'quill',
-  'raven', 'sable', 'tulip', 'urban', 'vapor', 'willow', 'xenon', 'yodel',
-];
 
 const TOKEN_PATTERN = /^[a-z]+(-[a-z]+)*$/;
 
 export function isValidToken(token: string): boolean {
   return TOKEN_PATTERN.test(token) && token.length >= 3 && token.length <= 64;
-}
-
-function randomToken(): string {
-  const pick = () => TOKEN_WORDS[Math.floor(Math.random() * TOKEN_WORDS.length)];
-  return `${pick()}-${pick()}-${pick()}`;
 }
 
 export function getLocalToken(): string | null {
@@ -51,95 +36,59 @@ function markLinked(): void {
 }
 
 /**
- * Marks the current (possibly still auto-generated) token as linked, without
- * changing it. Call this at the point the user takes the token somewhere
- * they'll use it for real — e.g. copying it to paste into the extension.
+ * Marks the current token as linked, without changing it. Call this at the
+ * point the user takes the token somewhere they'll use it for real.
  */
 export function markCurrentTokenLinked(): void {
   markLinked();
 }
 
-/** True if `users/{token}/meta/account` already exists. */
-async function tokenExists(token: string): Promise<boolean> {
+/** True if `users/{token}/meta/account` already exists in Firestore. */
+export async function tokenExists(token: string): Promise<boolean> {
   const snap = await getDoc(doc(getDb(), 'users', token, 'meta', 'account'));
   return snap.exists();
 }
 
-async function createAccountDoc(token: string): Promise<void> {
-  await setDoc(doc(getDb(), 'users', token, 'meta', 'account'), { createdAt: Date.now() });
-}
-
 /**
- * Generates a fresh, unclaimed random token and creates its account doc.
- * Retries on the (rare) chance a randomly generated token is already taken.
+ * Links this browser to `token` — a code the user already has (from the
+ * extension's Generate button, or another linked device). Web never writes
+ * an account doc to Firestore itself; it only checks whether one already
+ * exists, so the caller can tell the user "found" vs. "not found yet"
+ * (e.g. the extension hasn't completed its first sync). Links locally
+ * either way — knowing the token is the only authorization check there is,
+ * and a not-yet-synced code is still valid to wait on.
  */
-async function generateToken(): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const token = randomToken();
-    if (!(await tokenExists(token))) {
-      await createAccountDoc(token);
-      return token;
-    }
-  }
-  throw new Error('Could not generate a unique sync token — please try again.');
-}
-
-/**
- * Links this browser to `token`. If the token has never been used before,
- * this claims it (creates its account doc); if it already exists — e.g.
- * pasted in from the extension or another device — this just adopts it
- * locally. Knowing the token is the only authorization check there is.
- */
-export async function linkToken(token: string): Promise<void> {
+export async function linkToken(token: string): Promise<{ found: boolean }> {
   if (!isValidToken(token)) {
     throw new Error('Token must be lowercase words separated by hyphens.');
   }
-  if (!(await tokenExists(token))) {
-    await createAccountDoc(token);
-  }
+  const found = await tokenExists(token);
   setLocalToken(token);
   markLinked();
+  return { found };
 }
 
-/** Generates a brand-new random token, abandoning the old one's data. */
-export async function regenerateSyncToken(): Promise<string> {
-  const token = await generateToken();
-  setLocalToken(token);
-  markLinked();
-  return token;
+/** Unlinks this browser: clears the local token and linked flag. */
+export function unlinkToken(): void {
+  window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(LINKED_KEY);
 }
 
 /**
- * Returns this browser's sync token, generating one automatically on first
- * use so Settings always has something to show/copy. No sign-in step — the
- * token itself is the only credential.
+ * Returns this browser's sync token from localStorage, or null if none has
+ * been linked yet. No sign-in step, no auto-generation — the token itself
+ * is the only credential, and web only ever adopts one the user already has.
  *
- * `linked` is false until the user actually opts in (pasting the token into
- * the extension, saving it, or regenerating it via Settings). Callers that
- * decide where to read words from (Dashboard, Study) must pass `null` to
- * getWords() when `linked` is false, rather than the auto-generated token —
- * otherwise every fresh browser would silently query a real-but-empty
- * Firestore account instead of falling back to the extension's local words.
+ * `linked` is false until the user actually links a token via Settings.
+ * Callers that decide where to read words from (Dashboard, Study) must pass
+ * `null` to getWords() when `linked` is false, rather than the local token —
+ * otherwise a token sitting unlinked in localStorage would silently query a
+ * real-but-empty Firestore account instead of falling back to the
+ * extension's local words.
  */
 export function useSyncToken() {
-  // Lazy initializer reads localStorage synchronously up front, so the
-  // effect below only has async work (and thus setState) to do when no
-  // token exists yet — avoids a synchronous setState in the effect body.
   const [token, setToken] = useState<string | null>(() => getLocalToken());
   const [linked, setLinked] = useState(() => isLinked());
-  const [loading, setLoading] = useState(() => getLocalToken() === null);
-
-  useEffect(() => {
-    if (token) return;
-    let cancelled = false;
-    generateToken().then((t) => {
-      if (cancelled) return;
-      setLocalToken(t);
-      setToken(t);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [token]);
 
   useEffect(() => {
     function onStorage(e: StorageEvent) {
@@ -150,5 +99,8 @@ export function useSyncToken() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  return { token, linked, loading };
+  // localStorage is read synchronously up front, so there's nothing async
+  // to gate on — kept as `loading: false` so existing callers (Dashboard,
+  // Study) that gate rendering on it don't need to change.
+  return { token, linked, loading: false };
 }

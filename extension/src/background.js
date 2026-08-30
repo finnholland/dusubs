@@ -92,6 +92,16 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  // Web asked for an immediate sync (Settings' "Sync now" button). Defense
+  // in depth: re-read our own stored token and only proceed if it matches
+  // what the page claims — never sync to a token we don't ourselves hold.
+  if (msg.type === 'dusubs-sync-now' && msg.token) {
+    browser.storage.local.get({ syncToken: null }).then(({ syncToken }) => {
+      if (syncToken === msg.token) runSync();
+    });
+    return false;
+  }
+
   // Generic cross-origin fetch proxy
   if (msg.type === 'fetch-text' && msg.url) {
     fetch(msg.url)
