@@ -98,6 +98,18 @@ body {
   cursor: pointer;
 }
 
+.sync-secondary-btn {
+  flex: 1;
+  background: #252545;
+  color: #ccc;
+  border: 1px solid #3a3a6a;
+}
+
+.sync-secondary-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .sync-hint {
   font-size: 10px;
   color: #888;

@@ -1,9 +1,8 @@
 // @ts-check
 // Firebase project id used to build Firestore REST API URLs from the
 // extension (which has no env var mechanism / Firebase SDK). Must match
-// NEXT_PUBLIC_FIREBASE_PROJECT_ID used by the web app (web/lib/firebase.ts).
-//
-// TODO: fill in with the real Firebase project id before shipping.
+// NEXT_PUBLIC_FIREBASE_PROJECT_ID used by the web app (web/lib/firebase.ts,
+// currently web/.env.local — this is the real production project id).
 //
 // Plain (non-module) script so it works as both a Chrome service-worker
 // importScripts() target and a Firefox MV2 background script — exposes its
