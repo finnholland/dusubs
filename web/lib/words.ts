@@ -20,12 +20,51 @@ const PAGE_SIZE = 50;
 interface GetWordsOptions {
   language?: SavedWord['language'];
   after?: DocumentSnapshot;
+  /** Skip the cache and hit Firestore/the extension directly. */
+  force?: boolean;
+}
+
+type WordsResult = { words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'both' | 'none' };
+
+// In-memory, first-page-only cache so switching tabs (Dashboard <-> Study)
+// or revisiting a page doesn't re-hit Firestore + round-trip the extension
+// every time — both pages load the same "all words" first page on mount.
+// Keyed by token + language since each combination is a distinct query.
+// Cleared on any write (save/delete) so edits are never stale, and lives
+// only for the tab's lifetime (module-level, not persisted).
+const firstPageCache = new Map<string, WordsResult>();
+
+function cacheKey(token: string | null, language: SavedWord['language'] | undefined): string {
+  return `${token ?? '(none)'}::${language ?? '(all)'}`;
+}
+
+export function invalidateWordsCache(): void {
+  firstPageCache.clear();
 }
 
 export async function getWords(
   token: string | null,
-  { language, after }: GetWordsOptions = {}
-): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'both' | 'none' }> {
+  { language, after, force }: GetWordsOptions = {}
+): Promise<WordsResult> {
+  // Only the first page (no cursor) is cacheable — pagination pages are
+  // fetched on demand and never revisited via tab-switching.
+  if (!after) {
+    const key = cacheKey(token, language);
+    if (!force) {
+      const cached = firstPageCache.get(key);
+      if (cached) return cached;
+    }
+    const result = await fetchWords(token, { language, after });
+    firstPageCache.set(key, result);
+    return result;
+  }
+  return fetchWords(token, { language, after });
+}
+
+async function fetchWords(
+  token: string | null,
+  { language, after }: GetWordsOptions
+): Promise<WordsResult> {
   if (!token) {
     const words = await getWordsFromExtension();
     if (words) {
@@ -89,25 +128,30 @@ export async function saveWord(
   // cycle to add it later) — this doc is written straight to Firestore, so
   // nothing else will set the field the dashboard query orders by.
   const docRef = await addDoc(ref, { ...word, updatedAt: Date.now() });
+  invalidateWordsCache();
   return docRef.id;
 }
 
 export async function deleteWord(token: string | null, wordId: string, key?: string): Promise<void> {
   if (!token) {
     if (key) deleteWordFromExtension(key);
+    invalidateWordsCache();
     return;
   }
   await deleteDoc(doc(getDb(), 'users', token, 'words', wordId));
+  invalidateWordsCache();
 }
 
 export async function deleteAllWords(token: string | null): Promise<void> {
   if (!token) {
     deleteAllWordsFromExtension();
+    invalidateWordsCache();
     return;
   }
   const ref = collection(getDb(), 'users', token, 'words');
   const snap = await getDocs(query(ref));
   await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  invalidateWordsCache();
 }
 
 function escHtml(s: string) {

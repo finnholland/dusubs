@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { deleteDoc, doc, collection, getDocs } from 'firebase/firestore';
 import { useSyncToken, linkToken, unlinkToken, isValidToken } from '../../lib/auth';
-import { getDb } from '../../lib/firebase';
+import { deleteAllWords, invalidateWordsCache } from '../../lib/words';
 import { deleteAllWordsFromExtension, getExtensionSyncToken, requestSyncNow } from '@/lib/extension';
 
 type SyncNowState = 'idle' | 'syncing' | 'synced';
@@ -83,11 +82,10 @@ export default function SettingsPage() {
   const confirmDeleteAllWords = async () => {
     setShowDeleteModal(false);
     deleteAllWordsFromExtension();
+    invalidateWordsCache();
     if (deleteTarget === 'local' || !syncToken) return;
     setDeleting(true);
-    const db = getDb();
-    const snap = await getDocs(collection(db, 'users', syncToken, 'words'));
-    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, 'users', syncToken, 'words', d.id))));
+    await deleteAllWords(syncToken);
     setDeleting(false);
   };
 
