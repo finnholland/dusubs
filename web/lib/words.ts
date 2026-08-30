@@ -25,7 +25,7 @@ interface GetWordsOptions {
 export async function getWords(
   token: string | null,
   { language, after }: GetWordsOptions = {}
-): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'none' }> {
+): Promise<{ words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'both' | 'none' }> {
   if (!token) {
     const words = await getWordsFromExtension();
     if (words) {
@@ -44,9 +44,30 @@ export async function getWords(
   ];
   const q = query(ref, ...constraints);
   const snap = await getDocs(q);
-  const words = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SavedWord));
+  const cloudWords = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SavedWord));
   const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
-  return { words, lastDoc, source: 'firebase' };
+
+  // Merge in the extension's local words too, in case the browser has words
+  // that haven't synced to Firestore yet (or never will, e.g. after the
+  // extension's storage was cleared but before the deletion synced up).
+  // Only do this on the first page — paginated Firestore reads shouldn't
+  // keep re-merging the same local words onto every page.
+  if (!after) {
+    const extWords = await getWordsFromExtension();
+    if (extWords && extWords.length > 0) {
+      const filtered = language ? extWords.filter((w) => w.language === language) : extWords;
+      const byId = new Map(cloudWords.map((w) => [w.id, w]));
+      for (const w of filtered) {
+        // Firestore wins on conflict — it's the last-write-wins merge target
+        // that both the extension's background sync and other devices push
+        // to, so it's the more authoritative copy when both sides have it.
+        if (!byId.has(w.id)) byId.set(w.id, w);
+      }
+      return { words: Array.from(byId.values()), lastDoc, source: 'both' };
+    }
+  }
+
+  return { words: cloudWords, lastDoc, source: 'firebase' };
 }
 
 export async function saveWord(

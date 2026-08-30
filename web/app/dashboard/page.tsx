@@ -14,12 +14,12 @@ type ListState = {
   lastDoc: DocumentSnapshot | null;
   hasMore: boolean;
   fetching: boolean;
-  source: 'firebase' | 'extension' | 'none';
+  source: 'firebase' | 'extension' | 'both' | 'none';
 };
 
 type ListAction =
   | { type: 'fetch_start' }
-  | { type: 'fetch_done'; words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'none'; append: boolean }
+  | { type: 'fetch_done'; words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'both' | 'none'; append: boolean }
   | { type: 'delete'; id: string };
 
 const initialList: ListState = { words: [], lastDoc: null, hasMore: true, fetching: false, source: 'none' };
