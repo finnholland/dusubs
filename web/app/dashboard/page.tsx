@@ -22,7 +22,7 @@ type ListAction =
   | { type: 'fetch_done'; words: SavedWord[]; lastDoc: DocumentSnapshot | null; source: 'firebase' | 'extension' | 'both' | 'none'; append: boolean }
   | { type: 'delete'; id: string };
 
-const initialList: ListState = { words: [], lastDoc: null, hasMore: true, fetching: false, source: 'none' };
+const initialList: ListState = { words: [], lastDoc: null, hasMore: true, fetching: true, source: 'none' };
 
 function listReducer(state: ListState, action: ListAction): ListState {
   switch (action.type) {
@@ -130,13 +130,19 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {list.hasMore && (
+      {list.fetching &&
+        <span
+          className="mx-auto text-white/60 text-sm transition-colors opacity-40">
+          Loading…
+        </span>
+      }
+      {list.hasMore && !list.fetching && (
         <button
           onClick={() => load(list.lastDoc)}
           disabled={list.fetching}
           className="mx-auto border border-white/20 text-white/60 px-8 py-2 rounded-full text-sm hover:border-white/40 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
         >
-          {list.fetching ? 'Loading…' : 'Load more'}
+          Load more
         </button>
       )}
     </div>
