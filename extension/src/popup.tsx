@@ -151,7 +151,7 @@ function TrackOptions({ tracks }: { tracks: Track[] }) {
 }
 
 function App() {
-  const [tab, setTab] = useState<'settings' | 'words'>('settings');
+  const [tab, setTab] = useState<'settings' | 'words' | 'options'>('settings');
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [words, setWords] = useState<Record<string, SavedWord>>({});
@@ -323,39 +323,12 @@ function App() {
   return (
     <>
       <div class="tabs">
-        <button class={`tab${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>Settings</button>
+        <button class={`tab${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>Subtitles</button>
         <button class={`tab${tab === 'words' ? ' active' : ''}`} onClick={() => setTab('words')}>Saved</button>
+        <button class={`tab${tab === 'options' ? ' active' : ''}`} onClick={() => setTab('options')}>Settings</button>
       </div>
 
       <div class={`tab-panel${tab !== 'settings' ? ' hidden' : ''}`}>
-        <div class="learn-row">
-          <div className="learn-subtitle">
-            <span class="learn-label">Learn mode</span>
-            <span>{learnSubtitle}</span>
-          </div>
-          <Toggle id="tog-learn" checked={s.learnEnabled} onChange={v => set('learnEnabled', v)} />
-        </div>
-        {s.learnEnabled && activeLearnLang === 'zh' && (
-          <div class="toggle-sub">
-            <div class="toggle-row">
-              <label class="name" for="tog-pinyin">Pinyin</label>
-              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
-            </div>
-            <div class="toggle-row">
-              <label class="name" for="tog-sandhi">Sandhi colours</label>
-              <Toggle id="tog-sandhi" checked={s.sandhiEnabled && s.pinyinEnabled} disabled={!s.pinyinEnabled} onChange={v => set('sandhiEnabled', v)} />
-            </div>
-          </div>
-        )}
-        {s.learnEnabled && activeLearnLang === 'ja' && (
-          <div class="toggle-sub">
-            <div class="toggle-row">
-              <label class="name" for="tog-pinyin">Furigana</label>
-              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
-            </div>
-          </div>
-        )}
-        <hr class="divider" />
         <div class="track-row">
           <div class="track-label">Top</div>
           <div class="track-controls">
@@ -405,6 +378,36 @@ function App() {
           <label class="name" for="tog-shadow">Shadow</label>
           <Toggle id="tog-shadow" checked={s.shadow} onChange={v => set('shadow', v)} />
         </div>
+      </div>
+
+      <div class={`tab-panel${tab !== 'options' ? ' hidden' : ''}`}>
+        <div class="learn-row">
+          <div className="learn-subtitle">
+            <span class="learn-label">Learn mode</span>
+            <span>{learnSubtitle}</span>
+          </div>
+          <Toggle id="tog-learn" checked={s.learnEnabled} onChange={v => set('learnEnabled', v)} />
+        </div>
+        {s.learnEnabled && activeLearnLang === 'zh' && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">Pinyin</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
+            </div>
+            <div class="toggle-row">
+              <label class="name" for="tog-sandhi">Sandhi colours</label>
+              <Toggle id="tog-sandhi" checked={s.sandhiEnabled && s.pinyinEnabled} disabled={!s.pinyinEnabled} onChange={v => set('sandhiEnabled', v)} />
+            </div>
+          </div>
+        )}
+        {s.learnEnabled && activeLearnLang === 'ja' && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">Furigana</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
+            </div>
+          </div>
+        )}
 
         <hr class="divider" />
 
