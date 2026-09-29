@@ -7,7 +7,9 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false
   },
   "include": ["extension/src/popup.tsx"]
 }

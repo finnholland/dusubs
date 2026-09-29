@@ -6,7 +6,7 @@ type ExtWord = {
   ja?: string;       // legacy
   key?: string;      // legacy
   language?: SavedWord['language'];
-  py?: string;
+  reading?: string;
   en: string;
   sentNative?: string;
   sentZh?: string;
@@ -26,7 +26,7 @@ function toSavedWord(w: ExtWord): SavedWord {
     id: word ?? w.en,
     language: lang,
     char: word,
-    py: w.py,
+    reading: w.reading,
     en: w.en,
     sentNative: w.sentNative ?? w.sentZh ?? (lang === 'zh' ? w.sentKey : undefined) ?? w.sentJa ?? (lang === 'ja' ? w.sentKey : undefined),
     sentOther: w.sentOther,
@@ -39,14 +39,22 @@ function toSavedWord(w: ExtWord): SavedWord {
   };
 }
 
-/** Returns words from the browser extension, or null if not installed. */
+/**
+ * Returns words from the browser extension, or null if not installed.
+ *
+ * On a fresh navigation (e.g. opening dusubs.com/study straight from the
+ * extension popup) the content script that bridges postMessage to
+ * browser.storage.local can still be injecting when this fires, so a single
+ * request can race it and time out even though the extension is installed.
+ * Retry the request a few times with a growing delay before giving up.
+ */
 export function getWordsFromExtension(): Promise<SavedWord[] | null> {
   if (typeof window === 'undefined') return Promise.resolve(null);
+  const retryDelaysMs = [300, 600, 1200];
+
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      window.removeEventListener('message', handler);
-      resolve(null);
-    }, 300);
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
 
     function handler(e: MessageEvent) {
       if (e.data?.type !== 'DUSUBS_WORDS') return;
@@ -55,8 +63,21 @@ export function getWordsFromExtension(): Promise<SavedWord[] | null> {
       resolve((e.data.words as ExtWord[]).map(toSavedWord));
     }
 
+    function attemptRequest() {
+      window.postMessage({ type: 'DUSUBS_GET_WORDS' }, '*');
+      timer = setTimeout(() => {
+        if (attempt < retryDelaysMs.length) {
+          attempt++;
+          attemptRequest();
+        } else {
+          window.removeEventListener('message', handler);
+          resolve(null);
+        }
+      }, retryDelaysMs[attempt]);
+    }
+
     window.addEventListener('message', handler);
-    window.postMessage({ type: 'DUSUBS_GET_WORDS' }, '*');
+    attemptRequest();
   });
 }
 

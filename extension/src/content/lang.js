@@ -187,7 +187,7 @@ export function renderChinese(text) {
   const rawPinyinArr = pinyinArr.slice();
   let correctedSet = /** @type {Set<number>} */ (new Set());
   const hpfDict = getHpfDict();
-  if (cfg.learnMode === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
+  if (getActiveLearnLang(cfg) === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
     ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
   }
   let sandhiColour = cfg.track1Color;

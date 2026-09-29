@@ -1,24 +1,25 @@
 {
-  "manifest_version": 2,
-  "name": "Dusubs",
+  "manifest_version": 3,
+  "name": "Dusubs (dev)",
   "version": "1.3.0",
   "description": "Dual subtitles with pinyin, descriptions, and saving to lists",
   "permissions": [
     "activeTab",
     "tabs",
     "storage",
-    "webRequest",
+    "webRequest"
+  ],
+  "host_permissions": [
     "https://www.dusubs.com/*",
     "https://dusubs.com/*",
+    "https://firestore.googleapis.com/*",
+    "http://localhost/*",
     "*://*.youtube.com/*",
     "*://*.bilibili.com/*",
     "*://*.bilivideo.com/*"
   ],
   "background": {
-    "scripts": [
-      "src/background.js"
-    ],
-    "persistent": false
+    "service_worker": "src/background.js"
   },
   "content_scripts": [
     {
@@ -57,28 +58,18 @@
       "world": "ISOLATED",
       "matches": [
         "https://www.dusubs.com/*",
-        "https://dusubs.com/*"
+        "https://dusubs.com/*",
+        "http://localhost/*"
       ],
       "js": [
         "src/web-bridge.js"
       ]
     }
   ],
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "dusubs@dusubs.com",
-      "data_collection_permissions": {
-        "required": [
-          "none"
-        ],
-        "optional": []
-      }
-    }
-  },
   "icons": {
     "512": "assets/icon.png"
   },
-  "browser_action": {
+  "action": {
     "default_popup": "src/popup.html",
     "default_title": "Hanzi Pinyin Subtitles",
     "default_icon": {
@@ -86,19 +77,28 @@
     }
   },
   "web_accessible_resources": [
-    "vendor/cedict.json.gz",
-    "vendor/ja-dict.json.gz",
-    "dict/base.dat.gz",
-    "dict/check.dat.gz",
-    "dict/tid.dat.gz",
-    "dict/tid_pos.dat.gz",
-    "dict/tid_map.dat.gz",
-    "dict/unk.dat.gz",
-    "dict/unk_pos.dat.gz",
-    "dict/unk_map.dat.gz",
-    "dict/unk_char.dat.gz",
-    "dict/unk_compat.dat.gz",
-    "dict/unk_invoke.dat.gz",
-    "dict/cc.dat.gz"
+    {
+      "resources": [
+        "vendor/cedict.json.gz",
+        "vendor/ja-dict.json.gz",
+        "dict/base.dat.gz",
+        "dict/check.dat.gz",
+        "dict/tid.dat.gz",
+        "dict/tid_pos.dat.gz",
+        "dict/tid_map.dat.gz",
+        "dict/unk.dat.gz",
+        "dict/unk_pos.dat.gz",
+        "dict/unk_map.dat.gz",
+        "dict/unk_char.dat.gz",
+        "dict/unk_compat.dat.gz",
+        "dict/unk_invoke.dat.gz",
+        "dict/cc.dat.gz"
+      ],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.bilibili.com/*"
+      ]
+    }
   ]
 }

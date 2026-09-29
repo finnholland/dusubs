@@ -1,7 +1,7 @@
 // @ts-check
-import { browser, LOG, cfg, savedZh, renderState } from './state.js';
+import { browser, LOG, cfg, savedWords, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
-import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, loadEsDict, getEsDict, lookupSpanish, hasKanji, detectLang } from './lang.js';
+import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang, getActiveLearnLang, loadEsDict, getEsDict, lookupSpanish, } from './lang.js';
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
@@ -42,7 +42,7 @@ export function trimDefinition(en) {
 export function showTooltip(result, anchor) {
   clearTimeout(fadeTimer);
   fadeTimer = undefined;
-  const alreadySaved = savedZh.has(result.word);
+  const alreadySaved = savedWords.has(result.word);
 
   const wordDiv = document.createElement('div');
   wordDiv.className = 'hpf-tip-word';
@@ -61,7 +61,7 @@ export function showTooltip(result, anchor) {
   saveBtn.className = 'hpf-tip-save' + (alreadySaved ? ' saved' : '');
   saveBtn.textContent = alreadySaved ? 'Saved ✓' : 'Save word';
   saveBtn.addEventListener('click', () =>
-    savedZh.has(result.word) ? unsaveWord(result) : saveWord(result));
+    savedWords.has(result.word) ? unsaveWord(result) : saveWord(result));
 
   tooltip.replaceChildren(wordDiv, pinyinDiv, defsDiv, saveBtn);
   tooltip.classList.add('hpf-tip-visible');
@@ -75,13 +75,14 @@ function saveWord(result) {
   const sep = location.href.includes('?') ? '&' : '?';
   const baseUrl = location.href.replace(/([&?])t=[^&]*/g, '').replace(/\?$/, '');
   const url = baseUrl + sep + 't=' + Math.floor(t);
-  const topIsLearning = detectLang(cfg.track1 || '') === cfg.learnMode;
-  const entry = { char: result.word, py: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: cfg.learnMode, leitnerBox: 1, lastReviewed: null, nextReview: null };
+  const activeLang = getActiveLearnLang(cfg);
+  const topIsLearning = detectLang(cfg.track1 || '') === activeLang;
+  const entry = { char: result.word, reading: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: activeLang, leitnerBox: 1, lastReviewed: null, nextReview: null };
   browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
     savedWords[result.word] = entry;
     return browser.storage.local.set({ savedWords });
   }).then(() => {
-    savedZh.add(result.word);
+    savedWords.add(result.word);
     const btn = tooltip.querySelector('.hpf-tip-save');
     if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); }
   }).catch(err => console.error('storage error:', err));
@@ -93,7 +94,7 @@ function unsaveWord(result) {
     delete savedWords[result.word];
     return browser.storage.local.set({ savedWords });
   }).then(() => {
-    savedZh.delete(result.word);
+    savedWords.delete(result.word);
     const btn = tooltip.querySelector('.hpf-tip-save');
     if (btn) { btn.textContent = 'Save word'; btn.classList.remove('saved'); }
   }).catch(err => console.error('storage error:', err));
@@ -102,9 +103,10 @@ function unsaveWord(result) {
 export function attachHover(box, trackFn, getLastText) {
   box.addEventListener('mouseover', (e) => {
     const track = trackFn();
-    if (cfg.learnMode === 'none' || !track || !track.startsWith(cfg.learnMode)) return;
+    const activeLang = getActiveLearnLang(cfg);
+    if (!activeLang || !track || !track.startsWith(activeLang)) return;
 
-    if (cfg.learnMode === 'ja') {
+    if (activeLang === 'ja') {
       const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
       if (!wordSpan) return;
       const jaDict = getJaDict();
@@ -114,25 +116,25 @@ export function attachHover(box, trackFn, getLastText) {
       const pos = el.dataset.pos ?? '';
       if (pos === '助詞' || pos === '助動詞') {
         const GRAMMAR = /** @type {Record<string, [string, string]>} */ ({
-          'の': ['no',  'particle — possession / noun modification / nominalizer'],
-          'に': ['ni',  'particle — location, time, direction, indirect object'],
-          'を': ['wo',  'particle — direct object'],
-          'は': ['wa',  'particle — topic marker'],
-          'が': ['ga',  'particle — subject marker'],
-          'で': ['de',  'particle — location of action, means, cause'],
-          'と': ['to',  'particle — and / with / if (conditional) / quotation'],
-          'も': ['mo',  'particle — also / too / even'],
-          'へ': ['e',   'particle — direction (toward)'],
+          'の': ['no', 'particle — possession / noun modification / nominalizer'],
+          'に': ['ni', 'particle — location, time, direction, indirect object'],
+          'を': ['wo', 'particle — direct object'],
+          'は': ['wa', 'particle — topic marker'],
+          'が': ['ga', 'particle — subject marker'],
+          'で': ['de', 'particle — location of action, means, cause'],
+          'と': ['to', 'particle — and / with / if (conditional) / quotation'],
+          'も': ['mo', 'particle — also / too / even'],
+          'へ': ['e', 'particle — direction (toward)'],
           'から': ['kara', 'particle — from / because'],
           'まで': ['made', 'particle — until / up to'],
           'より': ['yori', 'particle — than / from'],
-          'か': ['ka',  'particle — question marker'],
-          'ね': ['ne',  'particle — seeking agreement (right? / isn\'t it?)'],
-          'よ': ['yo',  'particle — assertion / emphasis'],
+          'か': ['ka', 'particle — question marker'],
+          'ね': ['ne', 'particle — seeking agreement (right? / isn\'t it?)'],
+          'よ': ['yo', 'particle — assertion / emphasis'],
           'ます': ['masu', 'auxiliary — polite verb ending'],
           'です': ['desu', 'auxiliary — polite copula (is / am / are)'],
-          'た':  ['ta',  'auxiliary — past tense'],
-          'て':  ['te',  'auxiliary — te-form connector'],
+          'た': ['ta', 'auxiliary — past tense'],
+          'て': ['te', 'auxiliary — te-form connector'],
           'ない': ['nai', 'auxiliary — negation'],
           'ている': ['te iru', 'auxiliary — ongoing action / resultant state'],
         });

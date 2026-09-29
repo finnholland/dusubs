@@ -2,7 +2,7 @@ export interface SavedWord {
   id: string;
   language: 'zh' | 'ja' | 'es' | 'en' | 'fr';
   char?: string;
-  py?: string;
+  reading?: string;  // pronunciation aid: pinyin (zh), furigana/romaji (ja), etc.
   en: string;
   sentNative?: string;  // sentence in the learning language (same language as the saved word)
   sentOther?: string;   // sentence in the other subtitle track

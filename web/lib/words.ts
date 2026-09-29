@@ -92,7 +92,7 @@ export function exportWords(
     return words
       .map((w) => {
         const front = w.char ?? w.en ?? '';
-        let back = `${escHtml(w.py ?? '')}${w.py ? '<br>' : ''}${escHtml(w.en ?? '')}`;
+        let back = `${escHtml(w.reading ?? '')}${w.reading ? '<br>' : ''}${escHtml(w.en ?? '')}`;
         const sentNative = w.sentNative ?? '';
         const sentOther = w.sentOther ?? '';
         if (sentNative || sentOther) {
@@ -103,6 +103,6 @@ export function exportWords(
       .join('\n');
   }
   return words
-    .map((w) => `${w.char ?? w.en ?? ''}\t${w.py ? `${w.py} · ` : ''}${w.en ?? ''}`)
+    .map((w) => `${w.char ?? w.en ?? ''}\t${w.reading ? `${w.reading} · ` : ''}${w.en ?? ''}`)
     .join('\n');
 }

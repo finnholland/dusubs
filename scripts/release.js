@@ -11,6 +11,8 @@ const SOURCE_MANIFEST = 'extension/manifest.json'
 const DERIVED_MANIFESTS = [
   'extension/manifests/manifest.firefox.json',
   'extension/manifests/manifest.chrome.json',
+  'extension/manifests/manifest.firefox.dev.json',
+  'extension/manifests/manifest.chrome.dev.json',
 ]
 
 function readManifest(p) {

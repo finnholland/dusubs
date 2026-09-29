@@ -42,8 +42,8 @@ export default function WordCard({ word, onDelete, showLanguage }: Props) {
           {displayWord && (
             <span className="text-yellow-400 text-xl font-semibold mr-2">{displayWord}</span>
           )}
-          {word.py && (
-            <span className="text-white/50 text-sm">{word.py}</span>
+          {word.reading && (
+            <span className="text-white/50 text-sm">{word.reading}</span>
           )}
         </div>
         <button
