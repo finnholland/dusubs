@@ -35,9 +35,11 @@ async function runSync() {
   if (syncInFlight) { syncQueued = true; return; }
   syncInFlight = true;
   try {
-    const { syncToken } = await browser.storage.local.get({ syncToken: null });
-    console.log('[dusubs bg] runSync triggered, token present:', !!syncToken);
-    if (syncToken) await globalThis.DUSUBS_SYNC.syncWords(syncToken);
+    // syncToken here is the bare account uuid (the real capability), not the
+    // full "username-passphrase" string shown/copied in the popup — see sync.js.
+    const { syncToken, syncUsername, syncPassphrase } = await browser.storage.local.get({ syncToken: null, syncUsername: null, syncPassphrase: null });
+    console.log('[dusubs bg] runSync triggered, uuid present:', !!syncToken);
+    if (syncToken) await globalThis.DUSUBS_SYNC.syncWords(syncToken, syncUsername, syncPassphrase);
   } catch (err) {
     console.error('[dusubs bg] runSync threw', err);
   } finally {
@@ -85,21 +87,86 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Word deleted in the popup — push the delete to Firestore immediately
   // rather than waiting for the next passive sync (which has no tombstone
   // tracking and would otherwise pull the word back down from the cloud).
-  if (msg.type === 'dusubs-delete-word' && msg.token && msg.id) {
-    globalThis.DUSUBS_SYNC.pushDeletedWord(msg.token, msg.id)
+  // msg.uuid is the bare account uuid.
+  if (msg.type === 'dusubs-delete-word' && msg.uuid && msg.id) {
+    globalThis.DUSUBS_SYNC.pushDeletedWord(msg.uuid, msg.id)
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
     return true;
   }
 
-  // Web asked for an immediate sync (Settings' "Sync now" button). Defense
-  // in depth: re-read our own stored token and only proceed if it matches
-  // what the page claims — never sync to a token we don't ourselves hold.
-  if (msg.type === 'dusubs-sync-now' && msg.token) {
+  // Web asked for an immediate sync (Settings' "Sync now" button). `msg.uuid`
+  // is the bare account uuid, not the full displayed token. Defense in
+  // depth: re-read our own stored uuid and only proceed if it matches what
+  // the page claims — never sync to an account we don't ourselves hold.
+  if (msg.type === 'dusubs-sync-now' && msg.uuid) {
     browser.storage.local.get({ syncToken: null }).then(({ syncToken }) => {
-      if (syncToken === msg.token) runSync();
+      if (syncToken === msg.uuid) runSync();
     });
     return false;
+  }
+
+  // Popup asking whether a freshly-generated random uuid collides with one
+  // that's already in use (see popup.tsx generateSyncToken). Routed through
+  // here rather than fetching Firestore directly from the popup so
+  // config.js/sync.js stay the single place that knows the project id.
+  if (msg.type === 'dusubs-check-uuid' && msg.uuid) {
+    if (!globalThis.DUSUBS_SYNC) { sendResponse({ exists: false }); return false; }
+    globalThis.DUSUBS_SYNC.accountExists(msg.uuid)
+      .then((exists) => sendResponse({ exists }))
+      .catch(() => sendResponse({ exists: false }));
+    return true;
+  }
+
+  // Popup asking whether a candidate username is already taken by some
+  // account (see popup.tsx generateSyncToken). Same routing rationale as
+  // dusubs-check-uuid above.
+  if (msg.type === 'dusubs-check-username' && msg.username) {
+    if (!globalThis.DUSUBS_SYNC) { sendResponse({ exists: false }); return false; }
+    globalThis.DUSUBS_SYNC.usernameExists(msg.username)
+      .then((exists) => sendResponse({ exists }))
+      .catch(() => sendResponse({ exists: false }));
+    return true;
+  }
+
+  // Resolves a full pasted "username-passphrase" token, checking both parts
+  // match what's stored in Firestore. Used by the popup's manual paste box
+  // and can be reused by web via the bridge. See sync.js resolveToken.
+  if (msg.type === 'dusubs-resolve-token' && msg.token) {
+    if (!globalThis.DUSUBS_SYNC) { sendResponse({ result: null }); return false; }
+    globalThis.DUSUBS_SYNC.resolveToken(msg.token)
+      .then((result) => sendResponse({ result }))
+      .catch(() => sendResponse({ result: null }));
+    return true;
+  }
+
+  // Renames the passphrase on the account this extension currently holds.
+  // Defense in depth, same pattern as dusubs-sync-now: only proceed if
+  // msg.uuid matches our own stored uuid.
+  if (msg.type === 'dusubs-rename-passphrase' && msg.uuid && msg.newPassphrase) {
+    if (!globalThis.DUSUBS_SYNC) { sendResponse({ ok: false }); return false; }
+    browser.storage.local.get({ syncToken: null }).then(async ({ syncToken }) => {
+      if (syncToken !== msg.uuid) { sendResponse({ ok: false }); return; }
+      const ok = await globalThis.DUSUBS_SYNC.renamePassphrase(msg.uuid, msg.newPassphrase);
+      if (ok) await browser.storage.local.set({ syncPassphrase: msg.newPassphrase });
+      sendResponse({ ok });
+    });
+    return true;
+  }
+
+  // Renames the username on the account this extension currently holds.
+  // Same defense-in-depth pattern as dusubs-rename-passphrase. Distinguishes
+  // "already taken" from other failures so the popup can show a specific
+  // error message.
+  if (msg.type === 'dusubs-rename-username' && msg.uuid && msg.newUsername) {
+    if (!globalThis.DUSUBS_SYNC) { sendResponse({ ok: false, reason: 'error' }); return false; }
+    browser.storage.local.get({ syncToken: null }).then(async ({ syncToken }) => {
+      if (syncToken !== msg.uuid) { sendResponse({ ok: false, reason: 'error' }); return; }
+      const { ok, taken } = await globalThis.DUSUBS_SYNC.renameUsername(msg.uuid, msg.newUsername);
+      if (ok) await browser.storage.local.set({ syncUsername: msg.newUsername });
+      sendResponse({ ok, reason: ok ? null : taken ? 'taken' : 'error' });
+    });
+    return true;
   }
 
   // Generic cross-origin fetch proxy

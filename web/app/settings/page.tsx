@@ -1,18 +1,33 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSyncToken, linkToken, unlinkToken, isValidToken } from '../../lib/auth';
+import { useSyncToken, linkToken, unlinkToken, renameUsername, renamePassphrase, isValidToken, joinToken } from '../../lib/auth';
 import { deleteAllWords, invalidateWordsCache } from '../../lib/words';
 import { deleteAllWordsFromExtension, getExtensionSyncToken, requestSyncNow } from '@/lib/extension';
 
 type SyncNowState = 'idle' | 'syncing' | 'synced';
 
 export default function SettingsPage() {
-  const { token: syncToken, linked, loading } = useSyncToken();
+  // `token` here is the bare account uuid (the real capability); `username`
+  // is the unique, changeable identifier; `passphrase` is the real secret.
+  // The full displayable/pasteable code is username-passphrase joined.
+  const { token: uuid, username, passphrase, linked, loading } = useSyncToken();
+  const fullToken = uuid && username && passphrase ? joinToken(username, passphrase) : null;
+
   const [tokenDraft, setTokenDraft] = useState('');
   const [tokenError, setTokenError] = useState<string | null>(null);
-  const [linkNotice, setLinkNotice] = useState<string | null>(null);
   const [savingToken, setSavingToken] = useState(false);
+
+  const [usernameDraft, setUsernameDraft] = useState('');
+  const [renamingUsername, setRenamingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameRenameOpen, setUsernameRenameOpen] = useState(false);
+
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<'local' | 'all' | null>(null);
@@ -25,20 +40,20 @@ export default function SettingsPage() {
   const [syncNow, setSyncNow] = useState<SyncNowState>('idle');
 
   useEffect(() => {
-    if (!linked || !syncToken) return;
+    if (!linked || !fullToken) return;
     let cancelled = false;
     getExtensionSyncToken().then((t) => {
       if (!cancelled) setExtensionToken(t);
     });
     return () => { cancelled = true; };
-  }, [linked, syncToken]);
+  }, [linked, fullToken]);
 
-  const canSyncNow = linked && !!syncToken && extensionToken === syncToken;
+  const canSyncNow = linked && !!uuid && extensionToken === fullToken;
 
   const handleSyncNow = () => {
-    if (!syncToken) return;
+    if (!uuid) return;
     setSyncNow('syncing');
-    requestSyncNow(syncToken);
+    requestSyncNow(uuid);
     setTimeout(() => setSyncNow('synced'), 800);
     setTimeout(() => setSyncNow('idle'), 2500);
   };
@@ -46,22 +61,20 @@ export default function SettingsPage() {
   const saveTokenDraft = async () => {
     if (!tokenDraft) return;
     setTokenError(null);
-    setLinkNotice(null);
     if (!isValidToken(tokenDraft)) {
-      setTokenError('Lowercase letters and hyphens only, e.g. quiet-tiger-orbit.');
+      setTokenError('Expected a code like finn123-quiettiger, copied from the extension.');
       return;
     }
     setSavingToken(true);
     try {
-      const { found } = await linkToken(tokenDraft);
-      setLinkNotice(
-        found
-          ? 'Linked — found existing words for this code.'
-          : "Linked — no data found yet for this code. It'll appear once the extension syncs it."
-      );
+      const { ok } = await linkToken(tokenDraft);
+      if (!ok) {
+        setTokenError("Code not found — check it was copied correctly, or that the extension has synced at least once.");
+        return;
+      }
       setTokenDraft('');
     } catch (err) {
-      setTokenError(err instanceof Error ? err.message : 'Could not save token.');
+      setTokenError(err instanceof Error ? err.message : 'Could not link this code.');
     } finally {
       setSavingToken(false);
     }
@@ -71,7 +84,38 @@ export default function SettingsPage() {
     unlinkToken();
     setExtensionToken(undefined);
     setSyncNow('idle');
-    setLinkNotice(null);
+    setUsernameRenameOpen(false);
+    setRenameOpen(false);
+  };
+
+  const handleRenameUsername = async () => {
+    if (!usernameDraft.trim()) return;
+    setRenamingUsername(true);
+    setUsernameError(null);
+    try {
+      await renameUsername(usernameDraft);
+      setUsernameRenameOpen(false);
+      setUsernameDraft('');
+    } catch (err) {
+      setUsernameError(err instanceof Error ? err.message : 'Could not rename.');
+    } finally {
+      setRenamingUsername(false);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!renameDraft.trim()) return;
+    setRenaming(true);
+    setRenameError(null);
+    try {
+      await renamePassphrase(renameDraft);
+      setRenameOpen(false);
+      setRenameDraft('');
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : 'Could not rename.');
+    } finally {
+      setRenaming(false);
+    }
   };
 
   const promptDelete = (target: 'local' | 'all') => {
@@ -83,9 +127,9 @@ export default function SettingsPage() {
     setShowDeleteModal(false);
     deleteAllWordsFromExtension();
     invalidateWordsCache();
-    if (deleteTarget === 'local' || !syncToken) return;
+    if (deleteTarget === 'local' || !uuid) return;
     setDeleting(true);
-    await deleteAllWords(syncToken);
+    await deleteAllWords(uuid);
     setDeleting(false);
   };
 
@@ -99,14 +143,14 @@ export default function SettingsPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-white/80 font-medium">Extension Sync Token</h2>
         <p className="text-white/50 text-sm">
-          Generate a code in the DuSubs extension popup, then paste it here to link this device — anyone with this code can access your saved words, so treat it like a password.
+          Generate a code in the DuSubs extension popup, then paste it here to link this device. It&apos;s username-passphrase — the username is unique to you, the passphrase is your real secret, so treat the whole code like a password.
         </p>
 
-        {linked && syncToken ? (
+        {linked && fullToken ? (
           <>
             <div className="flex items-center gap-3">
               <div className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400">
-                {syncToken}
+                {fullToken}
               </div>
               {canSyncNow && (
                 <button
@@ -124,12 +168,84 @@ export default function SettingsPage() {
                 Unlink this device
               </button>
             </div>
-            {linkNotice && <p className="text-white/60 text-xs">{linkNotice}</p>}
             {!canSyncNow && (
               <p className="text-white/40 text-xs">
                 Words will appear here once the extension picks up this code (it syncs automatically in the background).
               </p>
             )}
+
+            {usernameRenameOpen ? (
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={usernameDraft}
+                  onChange={(e) => setUsernameDraft(e.target.value.toLowerCase())}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRenameUsername(); }}
+                  placeholder="new-username"
+                  spellCheck={false}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400 placeholder:text-white/30 placeholder:font-sans"
+                />
+                <button
+                  onClick={handleRenameUsername}
+                  disabled={renamingUsername || !usernameDraft.trim()}
+                  className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {renamingUsername ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setUsernameRenameOpen(false); setUsernameError(null); }}
+                  className="text-white/40 hover:text-white/70 text-sm px-2 cursor-pointer transition-colors shrink-0"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setUsernameRenameOpen(true); setUsernameDraft(username ?? ''); }}
+                className="self-start text-white/40 hover:text-yellow-400 text-xs underline cursor-pointer transition-colors"
+              >
+                Change username
+              </button>
+            )}
+            {usernameError && <p className="text-red-400 text-xs">{usernameError}</p>}
+
+            {renameOpen ? (
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value.toLowerCase())}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
+                  placeholder="new-passphrase"
+                  spellCheck={false}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400 placeholder:text-white/30 placeholder:font-sans"
+                />
+                <button
+                  onClick={handleRename}
+                  disabled={renaming || !renameDraft.trim()}
+                  className="border border-white/20 text-white/70 px-4 py-2.5 rounded-lg text-sm hover:border-white/40 hover:text-white transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {renaming ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setRenameOpen(false); setRenameError(null); }}
+                  className="text-white/40 hover:text-white/70 text-sm px-2 cursor-pointer transition-colors shrink-0"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setRenameOpen(true); setRenameDraft(passphrase ?? ''); }}
+                className="self-start text-white/40 hover:text-yellow-400 text-xs underline cursor-pointer transition-colors"
+              >
+                Change passphrase
+              </button>
+            )}
+            {renameError && <p className="text-red-400 text-xs">{renameError}</p>}
+            <p className="text-white/30 text-xs">
+              The username has to match exactly and is unique to you — the passphrase after it is your real secret, so keep it private. Either can be changed any time without losing your words.
+            </p>
           </>
         ) : (
           <>
@@ -139,7 +255,7 @@ export default function SettingsPage() {
                 value={tokenDraft}
                 onChange={(e) => setTokenDraft(e.target.value.toLowerCase())}
                 onKeyDown={(e) => { if (e.key === 'Enter') saveTokenDraft(); }}
-                placeholder="quiet-tiger-orbit — paste the code from the extension"
+                placeholder="finn123-quiettiger — paste the code from the extension"
                 spellCheck={false}
                 className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-mono text-yellow-400 placeholder:text-white/30 placeholder:font-sans"
               />

@@ -74,6 +74,14 @@ body {
   display: flex;
   gap: 6px;
   margin-bottom: 6px;
+  align-items: center;
+}
+
+.sync-field-label {
+  width: 68px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #aaa;
 }
 
 .sync-row input {
@@ -115,6 +123,10 @@ body {
   color: #888;
   margin: 0 0 4px;
   line-height: 1.4;
+}
+
+.sync-error {
+  color: #ff8a8a;
 }
 
 .color-select-wrap {

@@ -59,16 +59,21 @@ window.addEventListener('message', async (e) => {
 
   if (e.data.type === 'DUSUBS_GET_SYNC_TOKEN') {
     try {
-      const { syncToken } = await browser.storage.local.get({ syncToken: null });
-      window.postMessage({ type: 'DUSUBS_SYNC_TOKEN', token: syncToken }, '*');
+      // syncToken in storage is the bare account uuid; reconstruct the full
+      // "username-passphrase" string web actually links/displays/compares.
+      const { syncToken, syncUsername, syncPassphrase } = await browser.storage.local.get({ syncToken: null, syncUsername: null, syncPassphrase: null });
+      const token = syncToken && syncUsername && syncPassphrase ? `${syncUsername}-${syncPassphrase}` : null;
+      window.postMessage({ type: 'DUSUBS_SYNC_TOKEN', token }, '*');
     } catch (err) {
       window.postMessage({ type: 'DUSUBS_SYNC_TOKEN', token: null }, '*');
     }
   }
 
   if (e.data.type === 'DUSUBS_SYNC_NOW') {
-    const token = e.data.token;
-    if (!token) return;
-    browser.runtime.sendMessage({ type: 'dusubs-sync-now', token });
+    // e.data.uuid is the bare account uuid the page already confirmed
+    // matches the extension's own linked token (see DUSUBS_GET_SYNC_TOKEN).
+    const uuid = e.data.uuid;
+    if (!uuid) return;
+    browser.runtime.sendMessage({ type: 'dusubs-sync-now', uuid });
   }
 });

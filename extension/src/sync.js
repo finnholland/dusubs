@@ -1,8 +1,20 @@
 // @ts-check
 /* global chrome */
 // Syncs browser.storage.local savedWords with Firestore via the REST API,
-// using the pasted sync token as the users/{token}/words/* path segment.
-// No Firebase Auth session exists here — the token itself is the capability
+// keyed by account uuid as the users/{uuid}/words/* path segment.
+//
+// The pasted/displayed "sync token" is actually two parts joined as
+// `username-passphrase` (split on the single hyphen — neither half may
+// contain one): `uuid` is the real capability — short, random, and the only
+// thing that grants Firestore access — while `username` is a unique,
+// renameable identifier and `passphrase` is the real second factor, both
+// stored in meta/account. Resolving a pasted token runs a collection-group
+// query over every users/*/meta/account doc for a `username` match, then
+// checks the stored `passphrase` too, purely so a wrong/guessed passphrase
+// can't be used to confirm whether some username exists (see resolveToken).
+// Either half can be renamed in place (renameUsername/renamePassphrase)
+// without changing the uuid or moving any word data.
+// No Firebase Auth session exists here — the uuid itself is the capability
 // (see firestore.rules at repo root). Runs in the background service worker
 // so it keeps working even while the popup is closed.
 //
@@ -52,9 +64,20 @@
     return out;
   }
 
-  /** Fetches every cloud word for a token. Returns null on network failure. */
-  async function fetchAllCloudWords(token) {
-    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words`;
+  /**
+   * Splits a full pasted/displayed token "username-passphrase" on its one
+   * hyphen — neither half may contain a hyphen of its own. Returns null if
+   * there isn't exactly one.
+   */
+  function splitToken(fullToken) {
+    const parts = fullToken.split('-');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+    return { username: parts[0], passphrase: parts[1] };
+  }
+
+  /** Fetches every cloud word for an account. Returns null on network failure. */
+  async function fetchAllCloudWords(uuid) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/words`;
     try {
       const res = await fetch(url);
       log('fetchAllCloudWords', res.status, url);
@@ -82,11 +105,11 @@
    * filtering on the `updatedAt` field every push sets. Avoids re-reading the
    * whole collection on every sync cycle. Returns null on network failure.
    */
-  async function fetchChangedCloudWords(token, sinceMs) {
+  async function fetchChangedCloudWords(uuid, sinceMs) {
     // Per the Firestore REST API, runQuery's `parent` is the path segment
     // *before* the leaf collection, given as part of the URL itself — not a
     // field in the request body. https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/runQuery
-    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}:runQuery`;
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}:runQuery`;
     const body = {
       structuredQuery: {
         from: [{ collectionId: 'words' }],
@@ -126,9 +149,9 @@
     }
   }
 
-  /** Upserts one word doc under users/{token}/words/{id}, stamping updatedAt. */
-  async function pushWord(token, id, word) {
-    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words/${encodeURIComponent(id)}`;
+  /** Upserts one word doc under users/{uuid}/words/{id}, stamping updatedAt. */
+  async function pushWord(uuid, id, word) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/words/${encodeURIComponent(id)}`;
     const withStamp = { ...word, updatedAt: Date.now() };
     try {
       const res = await fetch(url, {
@@ -145,8 +168,8 @@
     }
   }
 
-  async function deleteCloudWord(token, id) {
-    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/words/${encodeURIComponent(id)}`;
+  async function deleteCloudWord(uuid, id) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/words/${encodeURIComponent(id)}`;
     try {
       const res = await fetch(url, { method: 'DELETE' });
       log('deleteCloudWord', id, res.status);
@@ -156,17 +179,182 @@
     }
   }
 
-  async function ensureAccountDoc(token) {
-    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(token)}/meta/account`;
+  /**
+   * True if users/{uuid}/meta/account already exists — i.e. someone (this
+   * device or another) has already claimed this uuid. Used to detect
+   * collisions when generating a fresh random uuid in the popup; failures
+   * are treated as "unknown, assume free" (returns false) so a network
+   * hiccup doesn't block Generate from producing anything.
+   */
+  async function accountExists(uuid) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/meta/account`;
     try {
       const res = await fetch(url);
-      if (res.ok) { log('ensureAccountDoc: already exists', token); return; }
+      log('accountExists', uuid, res.status);
+      return res.ok;
+    } catch (err) {
+      warn('accountExists threw', err);
+      return false;
+    }
+  }
+
+  /**
+   * Runs the users/*/meta collection-group query for `username == username`
+   * and returns the first matching account doc as { uuid, username,
+   * passphrase }, or null if no match / on any failure. The uuid isn't a
+   * field in the doc — it's recovered from the matched document's own path
+   * (users/{uuid}/meta/account).
+   */
+  async function queryAccountByUsername(username) {
+    const url = `${FIRESTORE_BASE_URL}:runQuery`;
+    const body = {
+      structuredQuery: {
+        from: [{ collectionId: 'meta', allDescendants: true }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'username' },
+            op: 'EQUAL',
+            value: { stringValue: username },
+          },
+        },
+        limit: 1,
+      },
+    };
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      log('queryAccountByUsername', username, res.status);
+      if (!res.ok) {
+        warn('queryAccountByUsername failed', res.status, await res.text().catch(() => ''));
+        return null;
+      }
+      const rows = await res.json();
+      const row = rows.find((r) => r.document);
+      if (!row) return null;
+      // .../users/{uuid}/meta/account
+      const parts = row.document.name.split('/');
+      const uuid = parts[parts.length - 3];
+      const fields = fromFirestoreFields(row.document.fields);
+      return { uuid, username: fields.username, passphrase: fields.passphrase };
+    } catch (err) {
+      warn('queryAccountByUsername threw', err);
+      return null;
+    }
+  }
+
+  /**
+   * True if some account has already claimed `username`. Used to detect
+   * collisions when generating a fresh username in the popup, and before
+   * renaming to a new one. Failures are treated as "unknown, assume free"
+   * so a network hiccup doesn't block Generate/rename entirely.
+   */
+  async function usernameExists(username) {
+    try {
+      return (await queryAccountByUsername(username)) !== null;
+    } catch (err) {
+      warn('usernameExists threw', err);
+      return false;
+    }
+  }
+
+  /**
+   * Resolves a full pasted/displayed token ("username-passphrase") to its
+   * account: looks the username up via the collection-group query, then
+   * checks its stored passphrase matches the parsed one. This is a
+   * capability check, not a lookup: a wrong guess at either half fails
+   * identically (no confirm/deny oracle) since the query only ever returns
+   * username matches, never anything keyed by passphrase.
+   * Returns { uuid, username, passphrase } on success, null on any failure
+   * (malformed token, username not found, or passphrase mismatch).
+   */
+  async function resolveToken(fullToken) {
+    const parsed = splitToken(fullToken);
+    if (!parsed) { log('resolveToken: malformed token', fullToken); return null; }
+    const account = await queryAccountByUsername(parsed.username);
+    if (!account) { log('resolveToken: username not found', parsed.username); return null; }
+    if (account.passphrase !== parsed.passphrase) {
+      log('resolveToken: passphrase mismatch for username', parsed.username);
+      return null;
+    }
+    return account;
+  }
+
+  /**
+   * Renames the passphrase on an existing account in place — uuid and all
+   * word data are untouched, this only rewrites the meta/account.passphrase
+   * field. Caller must already hold the current correct (uuid, oldPassphrase)
+   * pair (i.e. have successfully resolved it) — this performs no check of
+   * its own beyond that the account exists, since knowing the uuid is
+   * already the full capability.
+   */
+  async function renamePassphrase(uuid, newPassphrase) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/meta/account?updateMask.fieldPaths=passphrase`;
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { passphrase: { stringValue: newPassphrase } } }),
+      });
+      log('renamePassphrase', uuid, res.status);
+      return res.ok;
+    } catch (err) {
+      warn('renamePassphrase threw', err);
+      return false;
+    }
+  }
+
+  /**
+   * Renames the username on an existing account in place — uuid, passphrase,
+   * and all word data are untouched, this only rewrites
+   * meta/account.username. Rejects (returns { ok: false, taken: true }) if
+   * `newUsername` is already claimed by any account; caller must already
+   * hold the current correct (uuid, ...) pair, since knowing the uuid is
+   * already the full capability.
+   */
+  async function renameUsername(uuid, newUsername) {
+    if (await usernameExists(newUsername)) return { ok: false, taken: true };
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/meta/account?updateMask.fieldPaths=username`;
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { username: { stringValue: newUsername } } }),
+      });
+      log('renameUsername', uuid, res.status);
+      return { ok: res.ok, taken: false };
+    } catch (err) {
+      warn('renameUsername threw', err);
+      return { ok: false, taken: false };
+    }
+  }
+
+  /**
+   * Creates users/{uuid}/meta/account with the given username/passphrase if
+   * it doesn't already exist (idempotent PATCH-if-missing). Does NOT touch
+   * an existing doc's fields — renaming goes through renameUsername /
+   * renamePassphrase, not here, so a sync cycle never silently reverts a
+   * rename made elsewhere.
+   */
+  async function ensureAccountDoc(uuid, username, passphrase) {
+    const url = `${FIRESTORE_BASE_URL}/users/${encodeURIComponent(uuid)}/meta/account`;
+    try {
+      const res = await fetch(url);
+      if (res.ok) { log('ensureAccountDoc: already exists', uuid); return; }
       const createRes = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { createdAt: { integerValue: String(Date.now()) } } }),
+        body: JSON.stringify({
+          fields: {
+            createdAt: { integerValue: String(Date.now()) },
+            username: { stringValue: username ?? '' },
+            passphrase: { stringValue: passphrase ?? '' },
+          },
+        }),
       });
-      log('ensureAccountDoc: created', token, createRes.status);
+      log('ensureAccountDoc: created', uuid, createRes.status);
       if (!createRes.ok) warn('ensureAccountDoc create failed', createRes.status, await createRes.text().catch(() => ''));
     } catch (err) {
       warn('ensureAccountDoc threw', err);
@@ -191,12 +379,15 @@
    * Known limitation: no tombstones, so a word deleted on one side while
    * offline on the other will reappear on next sync rather than staying
    * deleted. Acceptable for v1 given the low write volume.
+   *
+   * `username`/`passphrase` are only used the first time this uuid is ever
+   * synced (to create meta/account) — pass the locally-stored ones along.
    */
-  async function syncWords(token) {
-    if (!token) { log('syncWords: no token, skipping'); return; }
+  async function syncWords(uuid, username, passphrase) {
+    if (!uuid) { log('syncWords: no uuid, skipping'); return; }
     const cycleStart = Date.now();
-    log('syncWords: starting cycle for token', token);
-    await ensureAccountDoc(token);
+    log('syncWords: starting cycle for uuid', uuid);
+    await ensureAccountDoc(uuid, username, passphrase);
 
     const { savedWords = {}, lastSyncedAt = null } = await browser.storage.local.get({ savedWords: {}, lastSyncedAt: null });
     log('syncWords: local savedWords count', Object.keys(savedWords).length, 'lastSyncedAt', lastSyncedAt);
@@ -212,8 +403,8 @@
     if (backfilled) await browser.storage.local.set({ savedWords });
 
     const cloudWords = lastSyncedAt === null
-      ? await fetchAllCloudWords(token)
-      : await fetchChangedCloudWords(token, lastSyncedAt);
+      ? await fetchAllCloudWords(uuid)
+      : await fetchChangedCloudWords(uuid, lastSyncedAt);
     if (cloudWords === null) {
       warn('syncWords: cloud fetch failed, skipping this cycle (watermark unchanged)');
       return;
@@ -229,12 +420,12 @@
     for (const [id, local] of localWords) {
       const cloud = cloudWords[id];
       if (!cloud) {
-        pushes.push(pushWord(token, id, local));
+        pushes.push(pushWord(uuid, id, local));
       } else {
         const localTs = localTimestamp(local);
         const cloudTs = localTimestamp(cloud);
         if (localTs >= cloudTs) {
-          if (localTs > cloudTs) pushes.push(pushWord(token, id, local));
+          if (localTs > cloudTs) pushes.push(pushWord(uuid, id, local));
         } else {
           merged[id] = cloud;
         }
@@ -250,10 +441,13 @@
     log('syncWords: cycle done —', pushes.length, 'pushed,', Object.keys(merged).length, 'total words, new watermark', cycleStart);
   }
 
-  async function pushDeletedWord(token, id) {
-    if (!token) return;
-    await deleteCloudWord(token, id);
+  async function pushDeletedWord(uuid, id) {
+    if (!uuid) return;
+    await deleteCloudWord(uuid, id);
   }
 
-  globalThis.DUSUBS_SYNC = { syncWords, pushDeletedWord };
+  globalThis.DUSUBS_SYNC = {
+    syncWords, pushDeletedWord, accountExists, usernameExists,
+    resolveToken, renamePassphrase, renameUsername, splitToken,
+  };
 })();

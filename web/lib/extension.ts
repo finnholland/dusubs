@@ -138,11 +138,12 @@ export function getExtensionSyncToken(): Promise<string | null> {
 
 /**
  * Fire-and-forget: asks the extension to run its sync cycle immediately for
- * `token`. Only call this once the caller has already confirmed `token`
- * matches the extension's own linked token — the extension re-checks this
- * itself too (defense in depth), but the page shouldn't offer the button
- * otherwise.
+ * the account `uuid` (the bare capability, not the full displayed token).
+ * Only call this once the caller has already confirmed the extension's own
+ * full linked token (from getExtensionSyncToken) matches this browser's
+ * linked token — the extension re-checks this itself too (defense in
+ * depth), but the page shouldn't offer the button otherwise.
  */
-export function requestSyncNow(token: string): void {
-  window.postMessage({ type: 'DUSUBS_SYNC_NOW', token }, '*');
+export function requestSyncNow(uuid: string): void {
+  window.postMessage({ type: 'DUSUBS_SYNC_NOW', uuid }, '*');
 }

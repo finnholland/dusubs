@@ -7,6 +7,13 @@
         { "fieldPath": "language", "order": "ASCENDING" },
         { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "meta",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "username", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

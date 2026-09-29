@@ -29,13 +29,13 @@ type WordsResult = { words: SavedWord[]; lastDoc: DocumentSnapshot | null; sourc
 // In-memory, first-page-only cache so switching tabs (Dashboard <-> Study)
 // or revisiting a page doesn't re-hit Firestore + round-trip the extension
 // every time — both pages load the same "all words" first page on mount.
-// Keyed by token + language since each combination is a distinct query.
-// Cleared on any write (save/delete) so edits are never stale, and lives
-// only for the tab's lifetime (module-level, not persisted).
+// Keyed by account uuid + language since each combination is a distinct
+// query. Cleared on any write (save/delete) so edits are never stale, and
+// lives only for the tab's lifetime (module-level, not persisted).
 const firstPageCache = new Map<string, WordsResult>();
 
-function cacheKey(token: string | null, language: SavedWord['language'] | undefined): string {
-  return `${token ?? '(none)'}::${language ?? '(all)'}`;
+function cacheKey(uuid: string | null, language: SavedWord['language'] | undefined): string {
+  return `${uuid ?? '(none)'}::${language ?? '(all)'}`;
 }
 
 export function invalidateWordsCache(): void {
@@ -43,29 +43,29 @@ export function invalidateWordsCache(): void {
 }
 
 export async function getWords(
-  token: string | null,
+  uuid: string | null,
   { language, after, force }: GetWordsOptions = {}
 ): Promise<WordsResult> {
   // Only the first page (no cursor) is cacheable — pagination pages are
   // fetched on demand and never revisited via tab-switching.
   if (!after) {
-    const key = cacheKey(token, language);
+    const key = cacheKey(uuid, language);
     if (!force) {
       const cached = firstPageCache.get(key);
       if (cached) return cached;
     }
-    const result = await fetchWords(token, { language, after });
+    const result = await fetchWords(uuid, { language, after });
     firstPageCache.set(key, result);
     return result;
   }
-  return fetchWords(token, { language, after });
+  return fetchWords(uuid, { language, after });
 }
 
 async function fetchWords(
-  token: string | null,
+  uuid: string | null,
   { language, after }: GetWordsOptions
 ): Promise<WordsResult> {
-  if (!token) {
+  if (!uuid) {
     const words = await getWordsFromExtension();
     if (words) {
       const filtered = language ? words.filter((w) => w.language === language) : words;
@@ -74,7 +74,7 @@ async function fetchWords(
     return { words: [], lastDoc: null, source: 'none' };
   }
 
-  const ref = collection(getDb(), 'users', token, 'words');
+  const ref = collection(getDb(), 'users', uuid, 'words');
   const constraints = [
     ...(language ? [where('language', '==', language)] : []),
     // Order by updatedAt, not savedAt: every doc gets updatedAt stamped
@@ -116,14 +116,14 @@ async function fetchWords(
 }
 
 export async function saveWord(
-  token: string | null,
+  uuid: string | null,
   word: Omit<SavedWord, 'id'>
 ): Promise<string> {
-  if (!token) {
+  if (!uuid) {
     saveWordToExtension(word);
     return word.char ?? word.en;
   }
-  const ref = collection(getDb(), 'users', token, 'words');
+  const ref = collection(getDb(), 'users', uuid, 'words');
   // Stamp updatedAt directly (rather than relying on the extension's sync
   // cycle to add it later) — this doc is written straight to Firestore, so
   // nothing else will set the field the dashboard query orders by.
@@ -132,23 +132,23 @@ export async function saveWord(
   return docRef.id;
 }
 
-export async function deleteWord(token: string | null, wordId: string, key?: string): Promise<void> {
-  if (!token) {
+export async function deleteWord(uuid: string | null, wordId: string, key?: string): Promise<void> {
+  if (!uuid) {
     if (key) deleteWordFromExtension(key);
     invalidateWordsCache();
     return;
   }
-  await deleteDoc(doc(getDb(), 'users', token, 'words', wordId));
+  await deleteDoc(doc(getDb(), 'users', uuid, 'words', wordId));
   invalidateWordsCache();
 }
 
-export async function deleteAllWords(token: string | null): Promise<void> {
-  if (!token) {
+export async function deleteAllWords(uuid: string | null): Promise<void> {
+  if (!uuid) {
     deleteAllWordsFromExtension();
     invalidateWordsCache();
     return;
   }
-  const ref = collection(getDb(), 'users', token, 'words');
+  const ref = collection(getDb(), 'users', uuid, 'words');
   const snap = await getDocs(query(ref));
   await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
   invalidateWordsCache();
