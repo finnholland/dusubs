@@ -49,41 +49,11 @@ const COLOR_NAMES: Record<string, string> = {
   '#ffffff': 'White', '#ffe97a': 'Yellow', '#F6B8FF': 'Pink', '#a8d8ff': 'Blue', '#b8ffb8': 'Green',
 };
 
-// Word list for generating candidate usernames/passphrases — both are drawn
-// from the same list, just for different purposes: username is checked for
-// uniqueness against Firestore (see generateSyncToken), passphrase is not
-// (it's the real secret, but doesn't need to be unique, only hard to guess).
-const TOKEN_WORDS = [
-  'quiet', 'tiger', 'orbit', 'maple', 'river', 'ember', 'cloud', 'stone',
-  'amber', 'birch', 'coral', 'delta', 'ferry', 'grove', 'haven', 'ivory',
-  'jetty', 'karma', 'lemon', 'medal', 'noble', 'olive', 'pearl', 'quill',
-  'raven', 'sable', 'tulip', 'urban', 'vapor', 'willow', 'xenon', 'yodel',
-];
-
-function randomWord(): string {
-  return TOKEN_WORDS[Math.floor(Math.random() * TOKEN_WORDS.length)];
-}
-
-/** Candidate username: one word plus a few random digits, kept short and typeable. */
-function randomUsername(): string {
-  const digits = Math.floor(Math.random() * 900 + 100); // 100-999
-  return `${randomWord()}${digits}`;
-}
-
-/** Candidate passphrase: two words — doesn't need to be unique, just hard to guess. */
-function randomPassphraseWord(): string {
-  return `${randomWord()}${randomWord()}`;
-}
-
-// The real capability: a short random hex id, never shown to the user. It's
-// generated once behind the scenes and saved locally — see sync.js and
-// firestore.rules for why it's the actual Firestore path/capability while
-// username/passphrase are just the memorable login pair layered on top.
-function randomUuid(): string {
-  let s = '';
-  for (let i = 0; i < 6; i++) s += Math.floor(Math.random() * 16).toString(16);
-  return s;
-}
+// The real capability — a short random hex id — is generated server-side
+// (see sync.js linkOrCreateAccount) when Link claims a brand-new username,
+// never shown in this UI. username/passphrase are just the memorable login
+// pair the user types themselves; nothing here generates candidates for
+// them anymore.
 
 /** Full displayed/pasted token is "username-passphrase" — see sync.js splitToken. */
 function joinToken(username: string, passphrase: string): string {
@@ -109,6 +79,15 @@ function TrashIcon() {
       <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />
       <path d="M9 6V4h6v2" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
     </svg>
   );
 }
@@ -183,11 +162,12 @@ function App() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Two separate editable fields, one per half of the account login —
   // username (unique, changeable) and passphrase (the real secret, also
-  // changeable). What's actually persisted to storage.local is
-  // { syncToken: uuid, syncUsername, syncPassphrase } — uuid is the real
-  // capability used for all Firestore calls, never shown in this UI.
-  // linkedUsername/linkedPassphrase mirror what's currently linked/saved,
-  // so Save can tell which field(s) the user actually edited.
+  // changeable). Nothing is generated or written until Link is pressed;
+  // what's persisted to storage.local is { syncToken: uuid, syncUsername,
+  // syncPassphrase } — uuid is the real capability used for all Firestore
+  // calls, never shown in this UI. linkedUuid/linkedUsername/
+  // linkedPassphrase mirror what's currently linked, so Link/Save can tell
+  // which field(s) the user actually edited vs. just relink/create.
   const [usernameField, setUsernameField] = useState('');
   const [passphraseField, setPassphraseField] = useState('');
   const [linkedUuid, setLinkedUuid] = useState<string | null>(null);
@@ -196,7 +176,6 @@ function App() {
   const [syncSaved, setSyncSaved] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncCopied, setSyncCopied] = useState(false);
-  const [syncGenerating, setSyncGenerating] = useState(false);
   const [syncSaving, setSyncSaving] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tabIdRef = useRef<number | null>(null);
@@ -268,58 +247,13 @@ function App() {
     });
   }, []);
 
-  async function generateSyncToken() {
-    setSyncGenerating(true);
-    setSyncError(null);
-    try {
-      // uuid is the real capability, never shown — collision-checked the
-      // same way as always, purely so two people don't unknowingly land on
-      // the same Firestore path and merge word lists.
-      let uuid = randomUuid();
-      for (let attempt = 0; attempt < 5; attempt++) {
-        let exists = false;
-        try {
-          const res = await browser.runtime.sendMessage({ type: 'dusubs-check-uuid', uuid });
-          exists = !!res?.exists;
-        } catch {
-          break; // background unreachable — use this uuid rather than block Generate
-        }
-        if (!exists) break;
-        uuid = randomUuid();
-      }
-      // username is the memorable login half and must be unique — same
-      // collision-check pattern as uuid above, just against usernames.
-      let username = randomUsername();
-      for (let attempt = 0; attempt < 5; attempt++) {
-        let exists = false;
-        try {
-          const res = await browser.runtime.sendMessage({ type: 'dusubs-check-username', username });
-          exists = !!res?.exists;
-        } catch {
-          break;
-        }
-        if (!exists) break;
-        username = randomUsername();
-      }
-      const passphrase = randomPassphraseWord();
-      setUsernameField(username);
-      setPassphraseField(passphrase);
-      setLinkedUuid(uuid);
-      setLinkedUsername(username);
-      setLinkedPassphrase(passphrase);
-      await browser.storage.local.set({ syncToken: uuid, syncUsername: username, syncPassphrase: passphrase });
-      setSyncSaved(true);
-      setTimeout(() => setSyncSaved(false), 1500);
-    } finally {
-      setSyncGenerating(false);
-    }
-  }
-
   /**
-   * Single Save/Link action for both fields. Not yet linked: resolves the
-   * two fields as a "username-passphrase" token, same as pasting one.
-   * Already linked: renames whichever field(s) were actually edited,
-   * in place — no account switch, no data moved.
+   * Single Link/Save action for both fields. Not yet linked: claims the
+   * typed username+passphrase — resolves an existing account if one already
+   * has that username (passphrase must match), or creates a brand-new
+   * account with a fresh uuid if the username is free (see sync.js
+   * linkOrCreateAccount). Already linked: renames whichever field(s) were
+   * actually edited, in place — no account switch, no data moved.
    */
   async function saveSyncFields() {
     const username = usernameField.trim().toLowerCase();
@@ -335,10 +269,14 @@ function App() {
     setSyncError(null);
     try {
       if (!linkedUuid) {
-        const res = await browser.runtime.sendMessage({ type: 'dusubs-resolve-token', token: `${username}-${passphrase}` });
-        const result = res?.result as { uuid: string; username: string; passphrase: string } | null;
+        const res = await browser.runtime.sendMessage({ type: 'dusubs-link-or-create', username, passphrase });
+        const result = res?.result as { uuid: string; username: string; passphrase: string; created: boolean } | { taken: true } | null;
         if (!result) {
-          setSyncError('Account not found — check the username and passphrase were copied correctly.');
+          setSyncError('Could not reach the extension background — try again.');
+          return;
+        }
+        if ('taken' in result) {
+          setSyncError('That username is taken and the passphrase didn’t match — check both, or pick a different username.');
           return;
         }
         setUsernameField(result.username);
@@ -443,7 +381,7 @@ function App() {
   }
 
   function toggleExportOpen() {
-    clearTimeout(dismissTimer.current);
+    dismissTimer.current && clearTimeout(dismissTimer.current);
     dismissTimer.current = null;
     setConfirmDelete(false);
     setExportOpen(o => !o);
@@ -574,19 +512,21 @@ function App() {
           />
         </div>
         <div class="sync-row">
-          <button class="sync-save-btn sync-secondary-btn" disabled={syncGenerating} onClick={generateSyncToken}>
-            {syncGenerating ? 'Generating…' : 'Generate'}
+          <button
+            class="sync-icon-btn"
+            disabled={!usernameField || !passphraseField}
+            title={syncCopied ? 'Copied' : 'Copy'}
+            onClick={copySyncToken}
+          >
+            <CopyIcon />
           </button>
-          <button class="sync-save-btn sync-secondary-btn" disabled={!usernameField || !passphraseField} onClick={copySyncToken}>
-            {syncCopied ? 'Copied' : 'Copy'}
-          </button>
-          <button class="sync-save-btn" disabled={syncSaving} onClick={saveSyncFields}>
+          <button class="sync-save-btn sync-link-btn" disabled={syncSaving} onClick={saveSyncFields}>
             {syncSaving ? 'Saving…' : syncSaved ? 'Saved' : linkedUuid ? 'Save' : 'Link'}
           </button>
         </div>
         {syncError && <p class="sync-hint sync-error">{syncError}</p>}
         <p class="sync-hint">
-          Generate a username + passphrase here (or type your own and hit Link) to sync words to your account — same two values as on dusubs.com/settings.
+          Type a username + passphrase here (your own, or a new pair) and hit Link to sync words to your account — same two values as on dusubs.com/settings.
           The username is unique to you; the passphrase is your real secret, so keep it private. Edit either field and hit Save any time without losing your words.
         </p>
 

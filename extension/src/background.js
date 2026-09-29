@@ -140,6 +140,18 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  // Popup's Link button: resolves username+passphrase against an existing
+  // account, or claims a brand-new one if the username isn't taken yet — see
+  // sync.js linkOrCreateAccount. No separate Generate step; typing your own
+  // new pair and hitting Link both creates and links in one action.
+  if (msg.type === 'dusubs-link-or-create' && msg.username && msg.passphrase) {
+    if (!globalThis.DUSUBS_SYNC) { sendResponse({ result: null }); return false; }
+    globalThis.DUSUBS_SYNC.linkOrCreateAccount(msg.username, msg.passphrase)
+      .then((result) => sendResponse({ result }))
+      .catch(() => sendResponse({ result: null }));
+    return true;
+  }
+
   // Renames the passphrase on the account this extension currently holds.
   // Defense in depth, same pattern as dusubs-sync-now: only proceed if
   // msg.uuid matches our own stored uuid.

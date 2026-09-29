@@ -282,6 +282,42 @@
     return account;
   }
 
+  function randomUuid() {
+    let s = '';
+    for (let i = 0; i < 6; i++) s += Math.floor(Math.random() * 16).toString(16);
+    return s;
+  }
+
+  /**
+   * Popup's Link button, with no separate Generate step anymore: resolves
+   * `username-passphrase` against an existing account first (same check as
+   * resolveToken — wrong passphrase on a real username still fails). If no
+   * account has that username at all, claims it fresh — new random uuid,
+   * account doc created with the typed username/passphrase — so typing your
+   * own new pair and hitting Link both creates and links in one step.
+   * Returns { uuid, username, passphrase, created } on success (created
+   * indicates which branch ran), or { taken: true } if the username exists
+   * but the passphrase didn't match (so it can't be silently claimed over),
+   * or null on failure.
+   */
+  async function linkOrCreateAccount(username, passphrase) {
+    const existing = await queryAccountByUsername(username);
+    if (existing) {
+      if (existing.passphrase !== passphrase) {
+        log('linkOrCreateAccount: username taken, passphrase mismatch', username);
+        return { taken: true };
+      }
+      return { ...existing, created: false };
+    }
+    let uuid = randomUuid();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (!(await accountExists(uuid))) break;
+      uuid = randomUuid();
+    }
+    await ensureAccountDoc(uuid, username, passphrase);
+    return { uuid, username, passphrase, created: true };
+  }
+
   /**
    * Renames the passphrase on an existing account in place — uuid and all
    * word data are untouched, this only rewrites the meta/account.passphrase
@@ -448,6 +484,6 @@
 
   globalThis.DUSUBS_SYNC = {
     syncWords, pushDeletedWord, accountExists, usernameExists,
-    resolveToken, renamePassphrase, renameUsername, splitToken,
+    resolveToken, linkOrCreateAccount, renamePassphrase, renameUsername, splitToken,
   };
 })();

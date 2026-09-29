@@ -118,6 +118,29 @@ body {
   cursor: default;
 }
 
+.sync-link-btn {
+  flex: 1;
+}
+
+.sync-icon-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #252545;
+  color: #ccc;
+  border: 1px solid #3a3a6a;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.sync-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .sync-hint {
   font-size: 10px;
   color: #888;
