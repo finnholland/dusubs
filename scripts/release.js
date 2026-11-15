@@ -7,10 +7,10 @@ const { execSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
-const SOURCE_MANIFEST = 'extension/manifest.json'
+// extension/manifest.json is generated (see scripts/watch.js and the release workflow), so versions live in manifests/
+const SOURCE_MANIFEST = 'extension/manifests/manifest.chrome.json'
 const DERIVED_MANIFESTS = [
   'extension/manifests/manifest.firefox.json',
-  'extension/manifests/manifest.chrome.json',
   'extension/manifests/manifest.firefox.dev.json',
   'extension/manifests/manifest.chrome.dev.json',
 ]

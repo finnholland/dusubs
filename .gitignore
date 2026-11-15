@@ -22,3 +22,6 @@ kiki.defaults.*.json
 # kiki — regenerated CDK app directories
 cdk-*/
 /artifacts-*
+
+# generated from extension/manifests/ by scripts/watch.js or the release workflow
+extension/manifest.json

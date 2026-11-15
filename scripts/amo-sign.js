@@ -23,10 +23,10 @@ function makeJWT() {
 }
 
 async function main() {
-  const manifest = JSON.parse(fs.readFileSync('extension/manifest.json', 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync('extension/manifests/manifest.firefox.json', 'utf8'));
   const version = manifest.version;
   const guid = manifest.browser_specific_settings?.gecko?.id;
-  if (!guid) { console.error('Missing browser_specific_settings.gecko.id in manifest.json'); process.exit(1); }
+  if (!guid) { console.error('Missing browser_specific_settings.gecko.id in manifest.firefox.json'); process.exit(1); }
 
   const xpiFiles = fs.readdirSync('./artifacts-firefox').filter(f => f.endsWith('.xpi'));
   if (!xpiFiles.length) { console.error('No XPI in ./artifacts-firefox'); process.exit(1); }

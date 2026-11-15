@@ -72,9 +72,12 @@ Install from the Firefox Add-ons store: **[addons.mozilla.org/firefox/addon/dusu
 
 ### Firefox (development)
 
-1. Clone or download this repo
-2. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on**
-3. Select `manifest.json`
+1. Clone this repo and run `npm install`
+2. Run `npm run watch:ff` (copies the dev Firefox manifest to `extension/manifest.json` and builds on change)
+3. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on**
+4. Select `extension/manifest.json`
+
+For Chrome, run `npm run watch:chrome` and load `extension/` as an unpacked extension.
 
 ## Usage
 
