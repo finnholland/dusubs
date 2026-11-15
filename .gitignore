@@ -5,16 +5,13 @@ popup.bundle.js
 popup.bundle.css
 content.bundle.js
 
+# generated from extension/manifests/ by scripts/watch.js or the release workflow
+extension/manifest.json
+
 dict/
 cedict.json
-cedict.json.gz
 es-dict.json
-es-dict.json.gz
 ja-dict.json
-ja-dict.json.gz
-scripts/kaikki-es.jsonl
-scripts/kaikki-en-es.jsonl
-scripts/jmdict-english.json
 artifacts-chrome/dusubs-chrome.zip
 
 # kiki — env-specific deployment outputs (ARNs, endpoints, infra IDs)
@@ -22,6 +19,3 @@ kiki.defaults.*.json
 # kiki — regenerated CDK app directories
 cdk-*/
 /artifacts-*
-
-# generated from extension/manifests/ by scripts/watch.js or the release workflow
-extension/manifest.json

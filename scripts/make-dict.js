@@ -1,21 +1,17 @@
 #!/usr/bin/env node
-// Downloads CC-CEDICT and writes cedict.json to the extension root.
+// Streams CC-CEDICT from mdbg.net and writes extension/vendor/cedict.json.gz.
 //
 // Usage:
-//   node scripts/make-dict.js              — download from mdbg.net
+//   node scripts/make-dict.js              — stream from mdbg.net
 //   node scripts/make-dict.js cedict.txt   — use local uncompressed file
 //
-// Output: cedict.json  (format: { "word": ["pīn yīn", "def1; def2"] })
+// Output: extension/vendor/cedict.json.gz  (format: { "word": ["pīn yīn", "def1; def2"] })
 
 'use strict';
 
-const https = require('https');
-const zlib = require('zlib');
-const fs = require('fs');
-const path = require('path');
 const readline = require('readline');
+const { openSource, writeVendorGzip } = require('./lib/dict-build');
 
-const OUT = path.join(__dirname, '..', 'extension/vendor/cedict.json');
 const CEDICT_URL = 'https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz';
 
 // ── Tone-mark conversion ───────────────────────────────────────────────────
@@ -90,37 +86,14 @@ async function build(inputStream) {
     if (count % 10000 === 0) process.stdout.write(`\r  ${count} entries parsed...`);
   }
 
-  process.stdout.write(`\r  ${count} entries parsed — writing ${path.basename(OUT)}\n`);
-  fs.writeFileSync(OUT, JSON.stringify(dict));
-  const mb = (fs.statSync(OUT).size / 1024 / 1024).toFixed(1);
-  console.log(`  done. ${mb} MB written to ${OUT}`);
+  process.stdout.write(`\r  ${count} entries parsed\n`);
+  writeVendorGzip('cedict', dict);
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
+// Optional local file: node scripts/make-dict.js cedict.txt
 const localFile = process.argv[2];
-
-if (localFile) {
-  console.log(`Reading ${localFile} ...`);
-  build(fs.createReadStream(path.resolve(localFile)));
-} else {
-  console.log(`Downloading CC-CEDICT from mdbg.net ...`);
-  const request = (url, cb) => {
-    https.get(url, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        request(res.headers.location, cb);
-      } else {
-        cb(res);
-      }
-    }).on('error', e => { console.error('Download failed:', e.message); process.exit(1); });
-  };
-
-  request(CEDICT_URL, (res) => {
-    if (res.statusCode !== 200) {
-      console.error('HTTP', res.statusCode); process.exit(1);
-    }
-    const gunzip = zlib.createGunzip();
-    res.pipe(gunzip);
-    build(gunzip);
-  });
-}
+openSource(localFile ?? CEDICT_URL, { gzip: !localFile })
+  .then(build)
+  .catch(e => { console.error('Build failed:', e.message); process.exit(1); });

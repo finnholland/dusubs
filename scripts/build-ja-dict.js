@@ -1,68 +1,40 @@
 #!/usr/bin/env node
 // Builds a trimmed JMdict lookup from jmdict-english.json
-// Usage: node scripts/build-ja-dict.js
-// Input:  scripts/jmdict-english.json  (downloaded automatically from scriptin/jmdict-simplified if missing)
-// Output: extension/vendor/ja-dict.json  { "食べる": { rd, en, pos }, ... }
+// Usage: node scripts/build-ja-dict.js [jmdict-eng.json]
+// Input:  latest release of scriptin/jmdict-simplified (or the local file given)
+// Output: extension/vendor/ja-dict.json.gz  { "食べる": { rd, en, pos }, ... }
 
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const os = require('os');
 const { execSync } = require('child_process');
+const { httpsGet, openSource, writeVendorGzip } = require('./lib/dict-build');
 
-function httpsGet(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'dusubs-build' } }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        resolve(httpsGet(res.headers.location));
-        return;
-      }
-      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode} for ${url}`)); return; }
-      resolve(res);
-    }).on('error', reject);
-  });
-}
-
-async function fetchJson(url) {
-  const res = await httpsGet(url);
-  return new Promise((resolve, reject) => {
-    let data = '';
-    res.on('data', chunk => data += chunk);
-    res.on('end', () => resolve(JSON.parse(data)));
-    res.on('error', reject);
-  });
-}
-
-async function downloadFile(url, dest) {
-  const res = await httpsGet(url);
-  return new Promise((resolve, reject) => {
-    const out = fs.createWriteStream(dest);
-    res.pipe(out);
-    out.on('finish', resolve);
-    out.on('error', reject);
-  });
-}
-
-async function downloadJmdict(inputPath) {
+/** Latest JMdict (English) from scriptin/jmdict-simplified, extracted in a temp dir that is removed afterwards. */
+async function downloadJmdict() {
   console.log('Fetching latest JMdict release info...');
-  const release = await fetchJson('https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest');
-  const asset = release.assets.find(a => /^jmdict-eng-[\d].*\.json\.tgz$/.test(a.name));
+  const res = await httpsGet('https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest');
+  let body = '';
+  for await (const chunk of res) body += chunk;
+  const asset = JSON.parse(body).assets.find(a => /^jmdict-eng-[\d].*\.json\.tgz$/.test(a.name));
   if (!asset) throw new Error('Could not find jmdict-eng asset in latest release');
 
-  console.log(`Downloading ${asset.name}...`);
-  const tmpFile = path.join(os.tmpdir(), asset.name);
-  await downloadFile(asset.browser_download_url, tmpFile);
-
-  console.log('Extracting...');
-  execSync(`tar -xzf "${tmpFile}" -C "${__dirname}"`, { stdio: 'inherit' });
-  fs.unlinkSync(tmpFile);
-
-  const extracted = fs.readdirSync(__dirname).find(f => f.startsWith('jmdict-eng') && f.endsWith('.json'));
-  if (!extracted) throw new Error('Could not find extracted jmdict JSON file');
-  fs.renameSync(path.join(__dirname, extracted), inputPath);
-  console.log('JMdict ready.');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dusubs-jmdict-'));
+  try {
+    console.log(`Downloading ${asset.name}...`);
+    const tgz = path.join(tmp, asset.name);
+    await new Promise(async (resolve, reject) => {
+      const out = fs.createWriteStream(tgz).on('finish', resolve).on('error', reject);
+      (await openSource(asset.browser_download_url)).pipe(out);
+    });
+    execSync(`tar -xzf "${tgz}" -C "${tmp}"`, { stdio: 'inherit' });
+    const json = fs.readdirSync(tmp).find(f => f.startsWith('jmdict-eng') && f.endsWith('.json'));
+    if (!json) throw new Error('Could not find extracted jmdict JSON file');
+    return JSON.parse(fs.readFileSync(path.join(tmp, json), 'utf8'));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }
-
 
 const HIRAGANA_TO_ROMAJI = {
   'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
@@ -125,10 +97,10 @@ function toRomaji(hiragana) {
 }
 
 async function main() {
-  const inputPath = path.join(__dirname, 'jmdict-english.json');
-  if (!fs.existsSync(inputPath)) await downloadJmdict(inputPath);
-
-  const jmdict = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+  // Optional local override: node scripts/build-ja-dict.js path/to/jmdict-eng.json
+  const jmdict = process.argv[2]
+    ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+    : await downloadJmdict();
   const out = Object.create(null);
 
   // Pass 1: kana-only entries (particles, function words, plain-kana vocab).
@@ -170,10 +142,7 @@ async function main() {
     }
   }
 
-  const outPath = path.join(__dirname, '..', 'extension/vendor/ja-dict.json');
-  fs.writeFileSync(outPath, JSON.stringify(out));
-  const mb = (fs.statSync(outPath).size / 1024 / 1024).toFixed(1);
-  console.log(`Built ja-dict.json: ${Object.keys(out).length} entries (${mb} MB)`);
+  writeVendorGzip('ja-dict', out);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

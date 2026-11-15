@@ -1,55 +1,15 @@
 #!/usr/bin/env node
 // Builds a trimmed Spanish→English lookup from Wiktextract (kaikki.org)
-// Usage: node scripts/build-es-dict.js
-// Input:  scripts/kaikki-es.jsonl  (downloaded automatically if missing)
-// Output: extension/vendor/es-dict.json  { "hablar": { en, pos }, ... }
+// Usage: node scripts/build-es-dict.js [es-extract.jsonl[.gz]] [en-extract.jsonl]
+// Input:  streamed from kaikki.org (or the local files given as arguments)
+// Output: extension/vendor/es-dict.json.gz  { "hablar": { en, pos }, ... }
 
-const fs = require('fs');
-const path = require('path');
-const https = require('https');
-const zlib = require('zlib');
-const readline = require('readline');
+const { jsonLines, writeVendorGzip } = require('./lib/dict-build');
 
 // Spanish Wiktionary extract (glosses in Spanish, but has translations[] with lang_code:'en')
 const KAIKKI_ES_URL = 'https://kaikki.org/dictionary/downloads/es/es-extract.jsonl.gz';
 // English Wiktionary extract for Spanish words (glosses are in English directly)
 const KAIKKI_EN_URL = 'https://kaikki.org/dictionary/Spanish/kaikki.org-dictionary-Spanish.jsonl';
-
-function httpsGet(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'dusubs-build' } }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        resolve(httpsGet(res.headers.location));
-        return;
-      }
-      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode} for ${url}`)); return; }
-      resolve(res);
-    }).on('error', reject);
-  });
-}
-
-async function downloadGzipped(url, destPath) {
-  const res = await httpsGet(url);
-  return new Promise((resolve, reject) => {
-    const gunzip = zlib.createGunzip();
-    res.pipe(gunzip);
-    const out = fs.createWriteStream(destPath);
-    gunzip.pipe(out);
-    out.on('finish', resolve);
-    out.on('error', reject);
-    gunzip.on('error', reject);
-  });
-}
-
-async function downloadPlain(url, destPath) {
-  const res = await httpsGet(url);
-  return new Promise((resolve, reject) => {
-    const out = fs.createWriteStream(destPath);
-    res.pipe(out);
-    out.on('finish', resolve);
-    out.on('error', reject);
-  });
-}
 
 const POS_MAP = {
   'noun': 'n', 'verb': 'v', 'adj': 'adj', 'adv': 'adv',
@@ -57,25 +17,14 @@ const POS_MAP = {
   'det': 'det', 'num': 'num', 'particle': 'part', 'article': 'art',
 };
 
-async function readLines(inputPath) {
-  const entries = [];
-  const rl = readline.createInterface({ input: fs.createReadStream(inputPath), crlfDelay: Infinity });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try { entries.push(JSON.parse(line)); } catch { }
-  }
-  return entries;
-}
-
-async function build(esPath, enPath) {
+async function build(esSrc, enSrc) {
   const out = Object.create(null);
   const formOfPending = Object.create(null);
 
   // Pass 1a: Spanish Wiktionary — use translations[lang_code='en'] as definitions
   console.log('  Pass 1a: Spanish Wiktionary entries...');
-  const esEntries = await readLines(esPath);
   let total = 0;
-  for (const entry of esEntries) {
+  for await (const entry of jsonLines(esSrc, { gzip: esSrc.endsWith('.gz') })) {
     if (entry.lang_code !== 'es') continue;
     const word = entry.word;
     if (!word || out[word]) continue;
@@ -101,9 +50,8 @@ async function build(esPath, enPath) {
 
   // Pass 1b: English Wiktionary — glosses are already in English; fills gaps from pass 1a
   console.log('  Pass 1b: English Wiktionary entries...');
-  const enEntries = await readLines(enPath);
   let enTotal = 0;
-  for (const entry of enEntries) {
+  for await (const entry of jsonLines(enSrc)) {
     const word = entry.word;
     if (!word || out[word]) continue;
 
@@ -148,28 +96,11 @@ async function build(esPath, enPath) {
 }
 
 async function main() {
-  const esPath = path.join(__dirname, 'kaikki-es.jsonl');
-  const enPath = path.join(__dirname, 'kaikki-en-es.jsonl');
-
-  if (!fs.existsSync(esPath)) {
-    console.log('Downloading Spanish Wiktionary extract...');
-    await downloadGzipped(KAIKKI_ES_URL, esPath);
-    console.log('Done.');
-  }
-  if (!fs.existsSync(enPath)) {
-    console.log('Downloading English Wiktionary Spanish extract...');
-    await downloadPlain(KAIKKI_EN_URL, enPath);
-    console.log('Done.');
-  }
-
-  console.log('Building es-dict.json...');
-  const dict = await build(esPath, enPath);
-
-  const outPath = path.join(__dirname, '..', 'extension/vendor/es-dict.json');
-  fs.writeFileSync(outPath, JSON.stringify(dict));
-  // fs.unlinkSync(inputPath);
-  const mb = (fs.statSync(outPath).size / 1024 / 1024).toFixed(1);
-  console.log(`Built es-dict.json: ${Object.keys(dict).length} entries (${mb} MB)`);
+  // Optional local overrides: node scripts/build-es-dict.js [es-extract.jsonl[.gz]] [en-extract.jsonl]
+  const esSrc = process.argv[2] ?? KAIKKI_ES_URL;
+  const enSrc = process.argv[3] ?? KAIKKI_EN_URL;
+  console.log('Building es-dict (streaming sources, nothing is saved to disk)...');
+  writeVendorGzip('es-dict', await build(esSrc, enSrc));
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

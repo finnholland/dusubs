@@ -66,9 +66,9 @@ This keeps kuromoji unmodified and the patch surface minimal.
 
 The Web Animations API and `timeupdate` events both fire too coarsely for reliable subtitle sync (`timeupdate` is spec'd at ~4 Hz and varies by browser). The extension runs a `requestAnimationFrame`-driven loop capped at ~12 fps, comparing `video.currentTime` against the parsed cue list on each tick. This gives consistently smooth subtitle transitions without tying the render to the video element's event model.
 
-### Dictionary gzipping at postinstall
+### Prebuilt, committed dictionaries
 
-CC-CEDICT (`cedict.json`) and JMdict (`ja-dict.json`) are large JSON files — combined ~15 MB uncompressed. They're gzipped at `npm install` time via a `postinstall` script, bringing them to ~5 MB. The browser decompresses them natively when fetched as static assets, so there's no runtime overhead and the extension package stays within AMO's size limits.
+CC-CEDICT, JMdict and the Spanish Wiktionary extract are large (the Spanish source alone is ~2 GB). `npm run build:dicts` streams each source from the network, trims it and writes `extension/vendor/*.json.gz` directly, with nothing saved to disk. The gzipped results are committed, so `npm install` and CI never download the sources. Re-run `npm run build:dicts` only to refresh dictionary data. The browser decompresses the files with `DecompressionStream` when a language is first needed.
 
 ### Next.js static export
 
@@ -98,6 +98,7 @@ extension/          Firefox/Chrome WebExtension (MV2 primary, MV3 for Chrome)
   vendor/
     cedict.json.gz  CC-CEDICT (Chinese definitions)
     ja-dict.json.gz JMdict (Japanese definitions)
+    es-dict.json.gz Wiktionary (Spanish definitions)
   dict/             Kuromoji binary dictionary files (*.dat.gz)
 
 web/                Next.js companion site (dusubs.com)
@@ -106,8 +107,10 @@ web/                Next.js companion site (dusubs.com)
   lib/              firebase.ts, auth.ts, words.ts, leitner.ts, extension.ts
 
 scripts/
-  make-dict.js      Downloads CC-CEDICT and builds cedict.json
-  build-ja-dict.js  Trims JMdict to ja-dict.json
+  make-dict.js      Streams CC-CEDICT and builds vendor/cedict.json.gz
+  build-ja-dict.js  Trims JMdict to vendor/ja-dict.json.gz
+  build-es-dict.js  Builds vendor/es-dict.json.gz from Wiktionary extracts
+  lib/dict-build.js Shared streaming and gzip helpers for the dictionary builds
   release.js        Release automation
   amo-sign.js       Signs XPI for Firefox Add-ons Mozilla
 
