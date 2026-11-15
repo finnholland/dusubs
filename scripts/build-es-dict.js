@@ -2,7 +2,8 @@
 // Builds a trimmed Spanish→English lookup from Wiktextract (kaikki.org)
 // Usage: node scripts/build-es-dict.js [es-extract.jsonl[.gz]] [en-extract.jsonl]
 // Input:  streamed from kaikki.org (or the local files given as arguments)
-// Output: extension/vendor/es-dict.json.gz  { "hablar": { en, pos }, ... }
+// Output: extension/vendor/es-dict.json.gz  { "hablar": { en, pos }, "habló": "hablar", ... }
+//         (a string value points at the entry holding the definition)
 
 const { jsonLines, writeVendorGzip } = require('./lib/dict-build');
 
@@ -74,21 +75,25 @@ async function build(esSrc, enSrc) {
   }
   console.log(`  ${enTotal} additional entries from English Wiktionary`);
 
-  // Pass 2: resolve form-of inflections to their lemma
+  // Pass 2: point form-of inflections at their lemma. A string value is a pointer to a
+  // full entry, which keeps the file small (inflections vastly outnumber lemmas).
   console.log('  Pass 2: resolving inflections...');
   let resolved = 0;
   for (const [word, lemma] of Object.entries(formOfPending)) {
     if (out[word]) continue;
-    if (out[lemma]) { out[word] = out[lemma]; resolved++; }
+    if (typeof out[lemma] === 'object') { out[word] = lemma; resolved++; }
   }
   console.log(`  ${resolved} inflections resolved`);
 
-  // Pass 3: accent-stripped aliases
+  // Pass 3: accent-stripped aliases (also pointers, never pointer chains)
   const strip = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
   let aliased = 0;
   for (const word of Object.keys(out)) {
     const plain = strip(word);
-    if (plain !== word && !out[plain]) { out[plain] = out[word]; aliased++; }
+    if (plain !== word && !out[plain]) {
+      out[plain] = typeof out[word] === 'string' ? out[word] : word;
+      aliased++;
+    }
   }
   console.log(`  ${aliased} accent-stripped aliases added`);
 

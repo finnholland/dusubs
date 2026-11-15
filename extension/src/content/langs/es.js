@@ -1,8 +1,21 @@
 // @ts-check
 import { escapeHtml, lazyDict } from './shared.js';
 
-/** @type {ReturnType<typeof lazyDict<Record<string, { en: string[], pos: string }>>>} */
+/** @typedef {{ en: string[], pos: string }} EsEntry */
+
+/** A string value points at the entry holding the definition (inflections, accent-less spellings). */
+/** @type {ReturnType<typeof lazyDict<Record<string, EsEntry | string>>>} */
 const dict = lazyDict('vendor/es-dict.json.gz', 'es-dict');
+
+/** @param {Record<string, EsEntry | string>} entries @param {string} word @returns {EsEntry | null} */
+function lookup(entries, word) {
+  for (const key of [word, word.toLowerCase()]) {
+    const hit = entries[key];
+    const entry = typeof hit === 'string' ? entries[hit] : hit;
+    if (entry && typeof entry === 'object') return entry;
+  }
+  return null;
+}
 
 const PUNCT = '¡!¿?.,;:"\'“”‘’«»—\\-()';
 const SPLIT = new RegExp(`(\\s+|[${PUNCT}])`);
@@ -30,7 +43,7 @@ export default {
     const entries = dict.get();
     if (!entries) { dict.load(); return null; }
     const word = wordSpan.dataset.base ?? '';
-    const entry = entries[word] ?? entries[word.toLowerCase()];
+    const entry = lookup(entries, word);
     if (!entry) return null;
     const pos = entry.pos ? `[${entry.pos}] ` : '';
     return { result: { word, pinyin: '', defs: pos + entry.en.join('; ') }, anchor: wordSpan };
