@@ -263,7 +263,8 @@ function App() {
     !s.learnEnabled ? '(hover, definitions, saving, + more)' :
       activeLearnLang === 'zh' ? '中 Chinese' :
         activeLearnLang === 'ja' ? '日 Japanese' :
-          'select a Chinese or Japanese track';
+          activeLearnLang === 'es' ? 'ES Spanish' :
+            'select a Chinese, Japanese or Spanish track';
   const { version } = browser.runtime.getManifest();
 
   const wordList = Object.values(words);

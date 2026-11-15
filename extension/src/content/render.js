@@ -1,7 +1,8 @@
 // @ts-check
 import { browser, LOG, cfg, cues, renderState } from './state.js';
 import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs } from './dom.js';
-import { detectLang, loadDict, loadKuromoji, loadJaDict, loadEsDict, getKuromoji, renderChinese, renderJapanese, renderSpanish, getActiveLearnLang } from './lang.js';
+import { detectLang, getActiveLearnLang } from './detect-lang.js';
+import { renderChinese, renderJapanese, renderSpanish } from './lang.js';
 
 // ── Apply styles ───────────────────────────────────────────────────────────
 export function applyStyle() {
@@ -29,7 +30,7 @@ export function applyStyle() {
 
   const topLang = detectLang(cfg.track1 || '');
   const bottomLang = detectLang(cfg.track2 || '');
-  /** @param {'zh'|'ja'|'en'} lang */
+  /** @param {string} lang */
   const isCjk = (lang) => lang === 'zh' || lang === 'ja';
 
   const activeLearnLang = getActiveLearnLang(cfg);
@@ -50,6 +51,7 @@ export function applyStyle() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+/** @param {string} selector */
 export function readText(selector) {
   return [...document.querySelectorAll(selector)]
     .map(el => el.textContent.trim()).filter(Boolean).join(' ');
@@ -60,12 +62,6 @@ export function setHTML(el, html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   el.replaceChildren(...doc.body.childNodes);
 }
-
-/** @param {string} s @returns {string} */
-export function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 
 // ── Cue parsing ────────────────────────────────────────────────────────────
 /**
@@ -113,6 +109,18 @@ export async function parseCues(slot, url) {
   }
 }
 
+/**
+ * Renders subtitle text into a box, annotated when it is in the language being studied.
+ * @param {HTMLElement} box @param {string} text @param {string} lang @param {string | null} learnLang
+ */
+function renderBox(box, text, lang, learnLang) {
+  if (lang !== learnLang) { box.textContent = text; return; }
+  if (lang === 'zh') setHTML(box, renderChinese(text));
+  else if (lang === 'ja') setHTML(box, renderJapanese(text));
+  else if (lang === 'es') setHTML(box, renderSpanish(text));
+  else box.textContent = text;
+}
+
 // ── Render loop ────────────────────────────────────────────────────────────
 export function tick() {
   if (document.hidden) return;
@@ -144,11 +152,6 @@ export function tick() {
   let top = cfg.track1 ? findCue('top') : '';
   let bottom = cfg.track2 ? findCue('bottom') : '';
 
-  if (t > 0 && Math.floor(t) % 2 === 0 && Math.floor(t) !== renderState.lastLogTime) {
-    renderState.lastLogTime = Math.floor(t);
-    LOG(`t=${t.toFixed(1)}s top=${cues.top.length} bottom=${cues.bottom.length} | "${top}" / "${bottom}"`);
-  }
-
   if (cfg.track1 && !top && !cues.top.length) top = readText('.bpx-player-subtitle-inner span, .bilibili-player-video-subtitle span');
   if (cfg.track2 && !bottom && !cues.bottom.length) bottom = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
@@ -160,31 +163,20 @@ export function tick() {
   const toneSandhiChanged = effectiveSandhi !== renderState.lastSandhiEnabled;
   if (toneSandhiChanged) renderState.lastSandhiEnabled = effectiveSandhi;
 
-  if (cfg.learnMode === 'ja' && !getKuromoji()) loadKuromoji();
-  if (cfg.learnMode === 'ja') loadJaDict();
-  if (cfg.learnMode === 'es') loadEsDict();
-
   const topLang = detectLang(cfg.track1 || '');
   const bottomLang = detectLang(cfg.track2 || '');
 
   if (top !== renderState.lastTop || showPinyinChanged || toneSandhiChanged) {
     renderState.lastTop = top;
-    if (topLang === 'zh' && cfg.learnMode === 'zh') setHTML(topBox, renderChinese(top));
-    else if (topLang === 'ja' && cfg.learnMode === 'ja') setHTML(topBox, renderJapanese(top));
-    else if (topLang === 'es' && cfg.learnMode === 'es') setHTML(topBox, renderSpanish(top));
-    else topBox.textContent = top;
+    renderBox(topBox, top, topLang, activeLearnLang);
   }
   if (bottom !== renderState.lastBottom || showPinyinChanged || toneSandhiChanged) {
     renderState.lastBottom = bottom;
-    if (bottomLang === 'zh' && cfg.learnMode === 'zh') setHTML(bottomBox, renderChinese(bottom));
-    else if (bottomLang === 'ja' && cfg.learnMode === 'ja') setHTML(bottomBox, renderJapanese(bottom));
-    else if (bottomLang === 'es' && cfg.learnMode === 'es') setHTML(bottomBox, renderSpanish(bottom));
-    else bottomBox.textContent = bottom;
+    renderBox(bottomBox, bottom, bottomLang, activeLearnLang);
   }
 
   topBox.style.display = top ? '' : 'none';
   bottomBox.style.display = (cfg.track2 && bottom) ? '' : 'none';
 }
 
-loadDict();
 setInterval(tick, 80);

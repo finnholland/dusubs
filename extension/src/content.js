@@ -8,13 +8,18 @@ import {
   trackManuallySet, setTrackManuallySet,
 } from './content/state.js';
 import { topBox, bottomBox } from './content/dom.js';
-import { loadKuromoji, loadJaDict, getActiveLearnLang } from './content/lang.js';
+import { getActiveLearnLang } from './content/detect-lang.js';
+import { loadDict, loadKuromoji, loadJaDict, loadEsDict } from './content/lang.js';
 import { applyStyle, parseCues } from './content/render.js';
 import './content/tooltip.js';
 
-/** Loads kuromoji/ja-dict if the currently active learn language is Japanese. */
+/** Loads the tokenizer/dictionary for the language learn mode is currently studying. */
 function loadForActiveLang() {
-  if (getActiveLearnLang(cfg) === 'ja') { loadKuromoji(); loadJaDict(); }
+  switch (getActiveLearnLang(cfg)) {
+    case 'zh': loadDict(); break;
+    case 'ja': loadKuromoji(); loadJaDict(); break;
+    case 'es': loadEsDict(); break;
+  }
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────
@@ -25,10 +30,8 @@ browser.storage.local.get({ ...DEFAULTS, savedWords: {}, zhTrack: null, enTrack:
   if (s.enTrack !== null && !s.track2) { s.track2 = s.enTrack; migrate.track2 = s.enTrack; }
   if (s.zhColor !== null && s.track1Color === DEFAULTS.track1Color) { s.track1Color = s.zhColor; migrate.track1Color = s.zhColor; }
   if (s.enColor !== null && s.track2Color === DEFAULTS.track2Color) { s.track2Color = s.enColor; migrate.track2Color = s.enColor; }
-  // One-time migration: learnMode ('none'|'zh'|'ja') → learnEnabled boolean
   if (Object.keys(migrate).length) browser.storage.local.set(migrate);
   setCfg({ ...s, track1: DEFAULTS.track1, track2: DEFAULTS.track2 });
-  LOG('cfg:', JSON.stringify(cfg));
   applyStyle();
   for (const word of Object.keys(s.savedWords || {})) savedWords.add(word);
   loadForActiveLang();
@@ -85,6 +88,7 @@ window.addEventListener(CHANNEL, (e) => {
     const isReal = (/** @type {{ code: string }} */ t) => !t.code.includes('-x-ytbasr');
     if (!cfg.track1) patchCfg({ track1: tlist.find(t => isReal(t) && t.code.startsWith('zh'))?.code || tlist.find(t => isReal(t) && t.code.startsWith('ja'))?.code || '' });
     if (!cfg.track2) patchCfg({ track2: tlist.find(t => isReal(t) && t.code.startsWith('en'))?.code || '' });
+    loadForActiveLang();
   }
   fetchSubtitles(lastTrackUrls);
 });

@@ -78,6 +78,7 @@
       "resources": [
         "vendor/cedict.json.gz",
         "vendor/ja-dict.json.gz",
+        "vendor/es-dict.json.gz",
         "dict/base.dat.gz",
         "dict/check.dat.gz",
         "dict/tid.dat.gz",

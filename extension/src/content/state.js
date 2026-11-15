@@ -36,7 +36,6 @@ export const cues = { top: [], bottom: [] };
 export const renderState = {
   lastTop: '',
   lastBottom: '',
-  lastLogTime: -1,
   /** @type {boolean|null} */ lastShowPinyin: null,
   /** @type {boolean|null} */ lastSandhiEnabled: null,
 };

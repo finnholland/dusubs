@@ -1,26 +1,29 @@
 // @ts-check
 // Standalone, dependency-free so it can be shared by both the content script
-// bundle (content/lang.js) and the popup bundle (popup.tsx).
+// bundle (content/*.js) and the popup bundle (popup.tsx).
 
-/** @param {string} code @returns {'zh' | 'ja' | 'en'} */
+/** @typedef {'zh' | 'ja' | 'es'} LearnLang */
+
+/** @param {string} code @returns {LearnLang | 'en'} */
 export function detectLang(code) {
   if (/^zh/i.test(code)) return 'zh';
   if (/^ja/i.test(code)) return 'ja';
+  if (/^es/i.test(code)) return 'es';
   return 'en';
 }
 
 /**
  * Derives which language learn mode is actually studying, based on the
- * currently selected tracks — top (track1) wins if both are zh/ja.
- * Returns null when learn mode is off or neither track is zh/ja.
+ * currently selected tracks — top (track1) wins if both are learnable.
+ * Returns null when learn mode is off or neither track is zh/ja/es.
  * @param {{ learnEnabled: boolean, track1: string, track2: string }} c
- * @returns {'zh' | 'ja' | null}
+ * @returns {LearnLang | null}
  */
 export function getActiveLearnLang(c) {
   if (!c.learnEnabled) return null;
-  const topLang = detectLang(c.track1 || '');
-  if (topLang === 'zh' || topLang === 'ja') return topLang;
-  const bottomLang = detectLang(c.track2 || '');
-  if (bottomLang === 'zh' || bottomLang === 'ja') return bottomLang;
+  for (const code of [c.track1, c.track2]) {
+    const lang = detectLang(code || '');
+    if (lang !== 'en') return lang;
+  }
   return null;
 }

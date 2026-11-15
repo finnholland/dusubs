@@ -1,13 +1,13 @@
 // @ts-check
 import { browser, LOG, cfg } from './state.js';
+import { getActiveLearnLang } from './detect-lang.js';
 
-// ── Language detection ─────────────────────────────────────────────────────
-/** @param {string} code @returns {'zh' | 'ja' | 'en'} */
-export function detectLang(code) {
-  if (/^zh/i.test(code)) return 'zh';
-  if (/^ja/i.test(code)) return 'ja';
-  if (/^es/i.test(code)) return 'es';
-  return 'en';
+/** @param {string} s @returns {string} */
+export /** Fetches a gzipped JSON file bundled with the extension. @param {string} path */
+async function fetchGzipJson(path) {
+  const resp = await fetch(browser.runtime.getURL(path));
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
 }
 
 // ── Chinese dictionary ─────────────────────────────────────────────────────
@@ -21,9 +21,7 @@ export async function loadDict() {
   if (hpfDict || dictLoading) return;
   dictLoading = true;
   try {
-    const resp = await fetch(browser.runtime.getURL('vendor/cedict.json.gz'));
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    hpfDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    hpfDict = await fetchGzipJson('vendor/cedict.json.gz');
     LOG('dict loaded:', Object.keys(hpfDict).length, 'entries');
   } catch (e) {
     LOG('dict load failed:', e);
@@ -48,8 +46,6 @@ export function lookupWord(text, idx) {
 let kuromoji = null;
 let kuromojiLoading = false;
 
-export function getKuromoji() { return kuromoji; }
-
 /** @type {Record<string, { rd: string, en: string[], pos: string }> | null} */
 let jaDict = null;
 let jaDictLoading = false;
@@ -67,6 +63,7 @@ export async function loadKuromoji() {
 
   const files = ['base', 'cc', 'check', 'tid', 'tid_pos', 'tid_map',
     'unk', 'unk_pos', 'unk_map', 'unk_char', 'unk_compat', 'unk_invoke'];
+  /** @type {Record<string, string>} */
   const blobs = {};
   await Promise.all(files.map(async name => {
     const res = await fetch(browser.runtime.getURL(`dict/${name}.dat.gz`));
@@ -98,9 +95,7 @@ export async function loadJaDict() {
   if (jaDict || jaDictLoading) return;
   jaDictLoading = true;
   try {
-    const resp = await fetch(browser.runtime.getURL('vendor/ja-dict.json.gz'));
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    jaDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    jaDict = await fetchGzipJson('vendor/ja-dict.json.gz');
     // Build reverse reading index: hiragana → entry, for when kuromoji returns
     // kana basic_form (e.g. ほう for 方). Kanji-keyed entries win over kana-keyed
     // entries since they're more specific (方 beats 報 for reading ほう).
@@ -131,9 +126,7 @@ export async function loadEsDict() {
   if (esDict || esDictLoading) return;
   esDictLoading = true;
   try {
-    const resp = await fetch(browser.runtime.getURL('vendor/es-dict.json.gz'));
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    esDict = await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    esDict = await fetchGzipJson('vendor/es-dict.json.gz');
     LOG('esDict loaded:', Object.keys(esDict).length, 'entries');
   } catch (e) {
     LOG('esDict load failed:', e);
@@ -154,51 +147,45 @@ export function renderSpanish(text) {
   const tokens = text.split(/(\s+|[¡!¿?.,;:"""''«»—\-()])/);
   return tokens.map(tok => {
     if (!tok) return '';
-    if (/^\s+$/.test(tok) || /^[¡!¿?.,;:"""''«»—\-()\s]+$/.test(tok)) return escapeHtmlLang(tok);
-    const escaped = escapeHtmlLang(tok);
+    if (/^\s+$/.test(tok) || /^[¡!¿?.,;:"""''«»—\-()\s]+$/.test(tok)) return escapeHtml(tok);
+    const escaped = escapeHtml(tok);
     return `<span class="dusub-word" data-base="${escaped}">${escaped}</span>`;
   }).join('');
 }
 
+/** @param {string} katakana */
 export function toHiragana(katakana) {
   return (katakana || '').replace(/[ァ-ヶ]/g, ch =>
     String.fromCharCode(ch.charCodeAt(0) - 0x60)
   );
 }
 
+/** @param {string} text */
 export function hasKanji(text) {
   return /[一-鿿㐀-䶿]/.test(text);
-}
-
-/** @param {{ baseForm: string, surface: string }} token */
-export function lookupJapanese(token) {
-  if (!jaDict) return null;
-  return jaDict[token.baseForm] ?? jaDict[token.surface] ?? null;
 }
 
 /** @param {string} text @returns {string} */
 export function renderChinese(text) {
   if (!text) return '';
   const lib = /** @type {any} */ (globalThis.pinyinPro);
-  if (!lib) return escapeHtmlLang(text);
+  if (!lib) return escapeHtml(text);
   const chars = [...text];
   let pinyinArr = /** @type {string[]} */ (lib.pinyin(text, { toneType: 'symbol', type: 'array' }));
-  if (pinyinArr.length !== chars.length) return escapeHtmlLang(text);
+  if (pinyinArr.length !== chars.length) return escapeHtml(text);
   const rawPinyinArr = pinyinArr.slice();
   let correctedSet = /** @type {Set<number>} */ (new Set());
   const hpfDict = getHpfDict();
   if (getActiveLearnLang(cfg) === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled && hpfDict) {
     ({ corrected: pinyinArr, correctedSet } = buildCorrectedPinyin(chars, pinyinArr));
   }
-  let sandhiColour = cfg.track1Color;
-  if (sandhiColour === '#ffffff') sandhiColour = cfg.track2Color;
-  if (sandhiColour === '#ffffff') sandhiColour = '#ffe97a';
+  // Highlight corrected syllables with the first non-white track colour
+  const sandhiColour = [cfg.track1Color, cfg.track2Color].find(c => c !== '#ffffff') ?? '#ffe97a';
   return chars.map((char, i) => {
     const py = pinyinArr[i] || '';
-    const escaped = escapeHtmlLang(char);
+    const escaped = escapeHtml(char);
     if (py && py !== char && /[一-鿿㐀-䶿豈-﫿]/.test(char)) {
       const rtColor = correctedSet.has(i) ? sandhiColour : '#fff';
-      correctedSet.has(i) ? LOG(`corrected pinyin for "${char}" at idx ${i}: ${py}`) : null;
       const rtStyle = cfg.pinyinEnabled ? `color:${rtColor}; margin-bottom:6px` : 'visibility:hidden';
       return `<ruby data-idx="${i}" data-py="${rawPinyinArr[i]}">${escaped}<rt style="${rtStyle}">${py}</rt></ruby>`;
     }
@@ -209,30 +196,25 @@ export function renderChinese(text) {
 /** @param {string} text @returns {string} */
 export function renderJapanese(text) {
   if (!text) return '';
-  if (!kuromoji) { loadKuromoji(); return escapeHtmlLang(text); }
-  const tokens = kuromoji.tokenize(text);
-  return tokens.map(token => {
+  if (!kuromoji) { loadKuromoji(); return escapeHtml(text); }
+  const rtStyle = cfg.pinyinEnabled ? 'color:#fff; margin-bottom:6px' : 'visibility:hidden';
+  const textHasKanji = hasKanji(text);
+  return kuromoji.tokenize(text).map(token => {
     const surface = token.surface_form;
     const baseForm = (token.basic_form && token.basic_form !== '*') ? token.basic_form : surface;
-    const reading = token.reading;
-    const pos = token.pos ?? '';
-    const escapedSurface = escapeHtmlLang(surface);
-    const escapedBase = escapeHtmlLang(baseForm);
-    const escapedPos = escapeHtmlLang(pos);
+    const reading = token.reading ? escapeHtml(toHiragana(token.reading)) : '';
+    const escapedSurface = escapeHtml(surface);
+    const attrs = `data-base="${escapeHtml(baseForm)}" data-pos="${escapeHtml(token.pos ?? '')}"`;
     if (hasKanji(surface) && reading) {
-      const hi = escapeHtmlLang(toHiragana(reading));
-      const rtStyle = cfg.pinyinEnabled ? 'color:#fff; margin-bottom:6px' : 'visibility:hidden';
-      return `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"><ruby>${escapedSurface}<rt style="${rtStyle}">${hi}</rt></ruby></span>`;
+      return `<span class="dusub-word" ${attrs}><ruby>${escapedSurface}<rt style="${rtStyle}">${reading}</rt></ruby></span>`;
     }
-    const rdAttr = reading ? ` data-rd="${escapeHtmlLang(toHiragana(reading))}"` : '';
-    return hasKanji(text) ?
-      `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}><ruby>${escapedSurface}<rt style="${cfg.pinyinEnabled ? 'color:#fff; margin-bottom:6px' : 'visibility:hidden'}"/></ruby></span>` :
-      `<span class="dusub-word" data-base="${escapedBase}" data-pos="${escapedPos}"${rdAttr}>${escapedSurface}</span>`;
+    const rdAttr = reading ? ` data-rd="${reading}"` : '';
+    // Empty <rt> keeps kana aligned with furigana'd neighbours on the same line
+    const inner = textHasKanji
+      ? `<ruby>${escapedSurface}<rt style="${rtStyle}"></rt></ruby>`
+      : escapedSurface;
+    return `<span class="dusub-word" ${attrs}${rdAttr}>${inner}</span>`;
   }).join('');
-}
-
-function escapeHtmlLang(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ── Tone sandhi helpers ────────────────────────────────────────────────────

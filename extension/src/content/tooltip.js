@@ -1,10 +1,37 @@
 // @ts-check
-import { browser, LOG, cfg, savedWords, renderState } from './state.js';
+import { browser, cfg, savedWords, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
-import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, detectLang, getActiveLearnLang, loadEsDict, getEsDict, lookupSpanish, } from './lang.js';
+import { detectLang, getActiveLearnLang } from './detect-lang.js';
+import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, loadEsDict, getEsDict, lookupSpanish } from './lang.js';
+
+/** Particles / auxiliaries: base form → [romaji, gloss]. Kuromoji gives these no dictionary entry. */
+const JA_GRAMMAR = /** @type {Record<string, [string, string]>} */ ({
+  'の': ['no', 'particle — possession / noun modification / nominalizer'],
+  'に': ['ni', 'particle — location, time, direction, indirect object'],
+  'を': ['wo', 'particle — direct object'],
+  'は': ['wa', 'particle — topic marker'],
+  'が': ['ga', 'particle — subject marker'],
+  'で': ['de', 'particle — location of action, means, cause'],
+  'と': ['to', 'particle — and / with / if (conditional) / quotation'],
+  'も': ['mo', 'particle — also / too / even'],
+  'へ': ['e', 'particle — direction (toward)'],
+  'から': ['kara', 'particle — from / because'],
+  'まで': ['made', 'particle — until / up to'],
+  'より': ['yori', 'particle — than / from'],
+  'か': ['ka', 'particle — question marker'],
+  'ね': ['ne', 'particle — seeking agreement (right? / isn\'t it?)'],
+  'よ': ['yo', 'particle — assertion / emphasis'],
+  'ます': ['masu', 'auxiliary — polite verb ending'],
+  'です': ['desu', 'auxiliary — polite copula (is / am / are)'],
+  'た': ['ta', 'auxiliary — past tense'],
+  'て': ['te', 'auxiliary — te-form connector'],
+  'ない': ['nai', 'auxiliary — negation'],
+    'ている': ['te iru', 'auxiliary — ongoing action / resultant state'],
+});
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
+/** @param {Element} [anchor] */
 export function positionTooltip(anchor) {
   const r = (anchor || topBox).getBoundingClientRect();
   const gap = 8;
@@ -28,6 +55,7 @@ export function startFade() {
   fadeTimer = setTimeout(hideTooltip, 250);
 }
 
+/** @param {string} en */
 export function trimDefinition(en) {
   const shortDef = en.split(';').slice(0, 4).join(';');
   const stripped = shortDef.replace(/\[.*?\]\s*/g, '').replace(/\(.*?\)\s*/g, '').replace(/;{2,}/g, ';').replace(/;\s*$/, '').trim();
@@ -68,6 +96,28 @@ export function showTooltip(result, anchor) {
   positionTooltip(anchor);
 }
 
+/** @param {boolean} saved */
+function setSaveButtonState(saved) {
+  const btn = tooltip.querySelector('.hpf-tip-save');
+  if (!btn) return;
+  btn.textContent = saved ? 'Saved ✓' : 'Save word';
+  btn.classList.toggle('saved', saved);
+}
+
+/**
+ * Persists a change to the stored word list, then mirrors it in the in-memory set and button.
+ * @param {string} word @param {Record<string, unknown> | null} entry null deletes the word
+ */
+function persistWord(word, entry) {
+  browser.storage.local.get({ savedWords: {} }).then(({ savedWords: stored }) => {
+    if (entry) stored[word] = entry; else delete stored[word];
+    return browser.storage.local.set({ savedWords: stored });
+  }).then(() => {
+    if (entry) savedWords.add(word); else savedWords.delete(word);
+    setSaveButtonState(!!entry);
+  }).catch(err => console.error('storage error:', err));
+}
+
 /** @param {{ word: string, pinyin: string, defs: string }} result */
 function saveWord(result) {
   const video = document.querySelector('video');
@@ -77,29 +127,26 @@ function saveWord(result) {
   const url = baseUrl + sep + 't=' + Math.floor(t);
   const activeLang = getActiveLearnLang(cfg);
   const topIsLearning = detectLang(cfg.track1 || '') === activeLang;
-  const entry = { char: result.word, reading: result.pinyin, en: trimDefinition(result.defs), sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null, sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null, url, language: activeLang, leitnerBox: 1, lastReviewed: null, nextReview: null };
-  browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
-    savedWords[result.word] = entry;
-    return browser.storage.local.set({ savedWords });
-  }).then(() => {
-    savedWords.add(result.word);
-    const btn = tooltip.querySelector('.hpf-tip-save');
-    if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); }
-  }).catch(err => console.error('storage error:', err));
+  persistWord(result.word, {
+    char: result.word,
+    reading: result.pinyin,
+    en: trimDefinition(result.defs),
+    sentNative: (topIsLearning ? renderState.lastTop : renderState.lastBottom) || null,
+    sentOther: (topIsLearning ? renderState.lastBottom : renderState.lastTop) || null,
+    url,
+    language: activeLang,
+    leitnerBox: 1,
+    lastReviewed: null,
+    nextReview: null,
+  });
 }
 
-/** @param {{ word: string, pinyin: string, defs: string }} result */
+/** @param {{ word: string }} result */
 function unsaveWord(result) {
-  browser.storage.local.get({ savedWords: {} }).then(({ savedWords }) => {
-    delete savedWords[result.word];
-    return browser.storage.local.set({ savedWords });
-  }).then(() => {
-    savedWords.delete(result.word);
-    const btn = tooltip.querySelector('.hpf-tip-save');
-    if (btn) { btn.textContent = 'Save word'; btn.classList.remove('saved'); }
-  }).catch(err => console.error('storage error:', err));
+  persistWord(result.word, null);
 }
 
+/** @param {HTMLElement} box @param {() => string} trackFn @param {() => string} getLastText */
 export function attachHover(box, trackFn, getLastText) {
   box.addEventListener('mouseover', (e) => {
     const track = trackFn();
@@ -115,30 +162,7 @@ export function attachHover(box, trackFn, getLastText) {
       const base = el.dataset.base;
       const pos = el.dataset.pos ?? '';
       if (pos === '助詞' || pos === '助動詞') {
-        const GRAMMAR = /** @type {Record<string, [string, string]>} */ ({
-          'の': ['no', 'particle — possession / noun modification / nominalizer'],
-          'に': ['ni', 'particle — location, time, direction, indirect object'],
-          'を': ['wo', 'particle — direct object'],
-          'は': ['wa', 'particle — topic marker'],
-          'が': ['ga', 'particle — subject marker'],
-          'で': ['de', 'particle — location of action, means, cause'],
-          'と': ['to', 'particle — and / with / if (conditional) / quotation'],
-          'も': ['mo', 'particle — also / too / even'],
-          'へ': ['e', 'particle — direction (toward)'],
-          'から': ['kara', 'particle — from / because'],
-          'まで': ['made', 'particle — until / up to'],
-          'より': ['yori', 'particle — than / from'],
-          'か': ['ka', 'particle — question marker'],
-          'ね': ['ne', 'particle — seeking agreement (right? / isn\'t it?)'],
-          'よ': ['yo', 'particle — assertion / emphasis'],
-          'ます': ['masu', 'auxiliary — polite verb ending'],
-          'です': ['desu', 'auxiliary — polite copula (is / am / are)'],
-          'た': ['ta', 'auxiliary — past tense'],
-          'て': ['te', 'auxiliary — te-form connector'],
-          'ない': ['nai', 'auxiliary — negation'],
-          'ている': ['te iru', 'auxiliary — ongoing action / resultant state'],
-        });
-        const [romaji, defs] = GRAMMAR[base] ?? ['', pos === '助動詞' ? 'auxiliary verb ending' : 'particle'];
+        const [romaji, defs] = JA_GRAMMAR[base] ?? ['', pos === '助動詞' ? 'auxiliary verb ending' : 'particle'];
         showTooltip({ word: base, pinyin: romaji, defs }, el);
         return;
       }
@@ -154,7 +178,7 @@ export function attachHover(box, trackFn, getLastText) {
       return;
     }
 
-    if (cfg.learnMode === 'es') {
+    if (activeLang === 'es') {
       const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
       if (!wordSpan) return;
       if (!getEsDict()) { loadEsDict(); return; }
