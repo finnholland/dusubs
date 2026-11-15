@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { getActiveLearnLang } from './content/detect-lang.js';
+import { getActiveLearnLang, LANG_META } from './content/detect-lang.js';
 import './popup.css';
 
 const browser: {
@@ -259,12 +259,10 @@ function App() {
   }
 
   const activeLearnLang = getActiveLearnLang({ learnEnabled: s.learnEnabled, track1: s.track1, track2: s.track2 });
+  const langMeta = activeLearnLang ? LANG_META[activeLearnLang] : null;
   const learnSubtitle =
     !s.learnEnabled ? '(hover, definitions, saving, + more)' :
-      activeLearnLang === 'zh' ? '中 Chinese' :
-        activeLearnLang === 'ja' ? '日 Japanese' :
-          activeLearnLang === 'es' ? 'ES Spanish' :
-            'select a Chinese, Japanese or Spanish track';
+      langMeta?.label ?? 'select a Chinese, Japanese or Spanish track';
   const { version } = browser.runtime.getManifest();
 
   const wordList = Object.values(words);
@@ -297,6 +295,60 @@ function App() {
             <ColorSelect id="track2-color" value={s.track2Color} colorOrder={COLORS_TRACK2} onChange={v => set('track2Color', v)} />
           </div>
         </div>
+
+        <hr class="divider" />
+
+        <div class="slider-row">
+          <label for="font-scale">Scale</label>
+          <span>{s.fontScale}%</span>
+          <input type="range" id="font-scale" min="50" max="200" step="5" value={s.fontScale}
+            onInput={e => set('fontScale', Number((e.target as HTMLInputElement).value))} />
+        </div>
+        <div class="slider-row">
+          <label for="sub-position">Position</label>
+          <span>{s.subPosition}%</span>
+          <input type="range" id="sub-position" min="0" max="40" step="1" value={s.subPosition}
+            onInput={e => set('subPosition', Number((e.target as HTMLInputElement).value))} />
+        </div>
+
+        <hr class="divider" />
+
+        <div class="toggle-row">
+          <label class="name" for="tog-stroke">Stroke</label>
+          <Toggle id="tog-stroke" checked={s.stroke} onChange={v => set('stroke', v)} />
+        </div>
+        <div class="toggle-row">
+          <label class="name" for="tog-window">Window</label>
+          <Toggle id="tog-window" checked={s.window} onChange={v => set('window', v)} />
+        </div>
+        <div class="toggle-row">
+          <label class="name" for="tog-shadow">Shadow</label>
+          <Toggle id="tog-shadow" checked={s.shadow} onChange={v => set('shadow', v)} />
+        </div>
+      </div>
+
+      <div class={`tab-panel${tab !== 'options' ? ' hidden' : ''}`}>
+        <div class="learn-row">
+          <div className="learn-subtitle">
+            <span class="learn-label">Learn mode</span>
+            <span>{learnSubtitle}</span>
+          </div>
+          <Toggle id="tog-learn" checked={s.learnEnabled} onChange={v => set('learnEnabled', v)} />
+        </div>
+        {s.learnEnabled && langMeta?.readingLabel && (
+          <div class="toggle-sub">
+            <div class="toggle-row">
+              <label class="name" for="tog-pinyin">{langMeta.readingLabel}</label>
+              <Toggle id="tog-pinyin" checked={s.pinyinEnabled} onChange={v => set('pinyinEnabled', v)} />
+            </div>
+            {langMeta.sandhi && (
+              <div class="toggle-row">
+                <label class="name" for="tog-sandhi">Sandhi colours</label>
+                <Toggle id="tog-sandhi" checked={s.sandhiEnabled && s.pinyinEnabled} disabled={!s.pinyinEnabled} onChange={v => set('sandhiEnabled', v)} />
+              </div>
+            )}
+          </div>
+        )}
 
         <hr class="divider" />
 

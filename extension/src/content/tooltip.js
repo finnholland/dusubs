@@ -2,32 +2,7 @@
 import { browser, cfg, savedWords, renderState } from './state.js';
 import { topBox, bottomBox, tooltip } from './dom.js';
 import { detectLang, getActiveLearnLang } from './detect-lang.js';
-import { loadDict, lookupWord, loadJaDict, getJaDict, getJaRdIndex, getHpfDict, hasKanji, loadEsDict, getEsDict, lookupSpanish } from './lang.js';
-
-/** Particles / auxiliaries: base form → [romaji, gloss]. Kuromoji gives these no dictionary entry. */
-const JA_GRAMMAR = /** @type {Record<string, [string, string]>} */ ({
-  'の': ['no', 'particle — possession / noun modification / nominalizer'],
-  'に': ['ni', 'particle — location, time, direction, indirect object'],
-  'を': ['wo', 'particle — direct object'],
-  'は': ['wa', 'particle — topic marker'],
-  'が': ['ga', 'particle — subject marker'],
-  'で': ['de', 'particle — location of action, means, cause'],
-  'と': ['to', 'particle — and / with / if (conditional) / quotation'],
-  'も': ['mo', 'particle — also / too / even'],
-  'へ': ['e', 'particle — direction (toward)'],
-  'から': ['kara', 'particle — from / because'],
-  'まで': ['made', 'particle — until / up to'],
-  'より': ['yori', 'particle — than / from'],
-  'か': ['ka', 'particle — question marker'],
-  'ね': ['ne', 'particle — seeking agreement (right? / isn\'t it?)'],
-  'よ': ['yo', 'particle — assertion / emphasis'],
-  'ます': ['masu', 'auxiliary — polite verb ending'],
-  'です': ['desu', 'auxiliary — polite copula (is / am / are)'],
-  'た': ['ta', 'auxiliary — past tense'],
-  'て': ['te', 'auxiliary — te-form connector'],
-  'ない': ['nai', 'auxiliary — negation'],
-    'ている': ['te iru', 'auxiliary — ongoing action / resultant state'],
-});
+import { getLang } from './langs/index.js';
 
 let fadeTimer = /** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined);
 
@@ -150,57 +125,10 @@ function unsaveWord(result) {
 export function attachHover(box, trackFn, getLastText) {
   box.addEventListener('mouseover', (e) => {
     const track = trackFn();
-    const activeLang = getActiveLearnLang(cfg);
-    if (!activeLang || !track || !track.startsWith(activeLang)) return;
-
-    if (activeLang === 'ja') {
-      const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
-      if (!wordSpan) return;
-      const jaDict = getJaDict();
-      if (!jaDict) { loadJaDict(); return; }
-      const el = /** @type {HTMLElement} */ (wordSpan);
-      const base = el.dataset.base;
-      const pos = el.dataset.pos ?? '';
-      if (pos === '助詞' || pos === '助動詞') {
-        const [romaji, defs] = JA_GRAMMAR[base] ?? ['', pos === '助動詞' ? 'auxiliary verb ending' : 'particle'];
-        showTooltip({ word: base, pinyin: romaji, defs }, el);
-        return;
-      }
-      const entry = jaDict[base] ?? getJaRdIndex()?.[el.dataset.rd ?? ''];
-      if (!entry) return;
-      const defs = entry.en.join('; ');
-      const entryPos = entry.pos ? `[${entry.pos}] ` : '';
-      const romaji = entry.rm || '';
-      const reading = hasKanji(base)
-        ? [entry.rd, romaji].filter(Boolean).join('  ')
-        : romaji || entry.rd;
-      showTooltip({ word: base, pinyin: reading, defs: entryPos + defs }, wordSpan);
-      return;
-    }
-
-    if (activeLang === 'es') {
-      const wordSpan = /** @type {Element} */ (e.target).closest('.dusub-word[data-base]');
-      if (!wordSpan) return;
-      if (!getEsDict()) { loadEsDict(); return; }
-      const base = /** @type {HTMLElement} */ (wordSpan).dataset.base ?? '';
-      const entry = lookupSpanish(base);
-      if (!entry) return;
-      const esPos = entry.pos ? `[${entry.pos}] ` : '';
-      showTooltip({ word: base, pinyin: '', defs: esPos + entry.en.join('; ') }, wordSpan);
-      return;
-    }
-
-    if (!getHpfDict()) { loadDict(); return; }
-    const charEl = /** @type {Element} */ (e.target).closest('[data-idx]');
-    if (!charEl) return;
-    const idx = parseInt(/** @type {HTMLElement} */(charEl).dataset.idx, 10);
-    const result = lookupWord(getLastText(), idx);
-    if (!result) return;
-    const wordLen = [...result.word].length;
-    const charEls = [...box.querySelectorAll('[data-idx]')]
-      .filter(r => { const ri = parseInt(/** @type {HTMLElement} */(r).dataset.idx, 10); return ri >= idx && ri < idx + wordLen; });
-    const ctxPinyin = charEls.map(r => /** @type {HTMLElement} */(r).dataset.py || '').join(' ').trim();
-    showTooltip({ ...result, pinyin: ctxPinyin || result.pinyin }, charEl);
+    const learnLang = getActiveLearnLang(cfg);
+    if (!learnLang || !track || !track.startsWith(learnLang)) return;
+    const hit = getLang(learnLang).hover(/** @type {Element} */ (e.target), { box, text: getLastText() });
+    if (hit) showTooltip(hit.result, hit.anchor);
   });
   box.addEventListener('mouseleave', startFade);
 }

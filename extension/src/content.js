@@ -9,17 +9,14 @@ import {
 } from './content/state.js';
 import { topBox, bottomBox } from './content/dom.js';
 import { getActiveLearnLang } from './content/detect-lang.js';
-import { loadDict, loadKuromoji, loadJaDict, loadEsDict } from './content/lang.js';
+import { getLang } from './content/langs/index.js';
 import { applyStyle, parseCues } from './content/render.js';
 import './content/tooltip.js';
 
 /** Loads the tokenizer/dictionary for the language learn mode is currently studying. */
 function loadForActiveLang() {
-  switch (getActiveLearnLang(cfg)) {
-    case 'zh': loadDict(); break;
-    case 'ja': loadKuromoji(); loadJaDict(); break;
-    case 'es': loadEsDict(); break;
-  }
+  const lang = getActiveLearnLang(cfg);
+  if (lang) getLang(lang).load();
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 // @ts-check
 import { browser, LOG, cfg, cues, renderState } from './state.js';
 import { root, topBox, bottomBox, overlayContainer, attachOverlay, showSiteSubs } from './dom.js';
-import { detectLang, getActiveLearnLang } from './detect-lang.js';
-import { renderChinese, renderJapanese, renderSpanish } from './lang.js';
+import { detectLang, getActiveLearnLang, LANG_META } from './detect-lang.js';
+import { getLang } from './langs/index.js';
 
 // ── Apply styles ───────────────────────────────────────────────────────────
 export function applyStyle() {
@@ -31,13 +31,10 @@ export function applyStyle() {
   const topLang = detectLang(cfg.track1 || '');
   const bottomLang = detectLang(cfg.track2 || '');
   /** @param {string} lang */
-  const isCjk = (lang) => lang === 'zh' || lang === 'ja';
+  const isCjk = (lang) => lang !== 'en' && LANG_META[lang].cjk;
 
   const activeLearnLang = getActiveLearnLang(cfg);
-  const topNeedsRubyPad = cfg.pinyinEnabled && (
-    (topLang === 'zh' && activeLearnLang === 'zh') ||
-    (topLang === 'ja' && activeLearnLang === 'ja')
-  );
+  const topNeedsRubyPad = cfg.pinyinEnabled && topLang === activeLearnLang && !!activeLearnLang && !!LANG_META[activeLearnLang].readingLabel;
   const topWinBg = cfg.window
     ? `background:rgba(0,0,0,0.5);padding:${topNeedsRubyPad ? '.25em' : '0'} 10px 0;border-radius:3px;`
     : '';
@@ -114,11 +111,8 @@ export async function parseCues(slot, url) {
  * @param {HTMLElement} box @param {string} text @param {string} lang @param {string | null} learnLang
  */
 function renderBox(box, text, lang, learnLang) {
-  if (lang !== learnLang) { box.textContent = text; return; }
-  if (lang === 'zh') setHTML(box, renderChinese(text));
-  else if (lang === 'ja') setHTML(box, renderJapanese(text));
-  else if (lang === 'es') setHTML(box, renderSpanish(text));
-  else box.textContent = text;
+  if (!learnLang || lang !== learnLang) { box.textContent = text; return; }
+  setHTML(box, getLang(learnLang).render(text));
 }
 
 // ── Render loop ────────────────────────────────────────────────────────────
@@ -156,10 +150,11 @@ export function tick() {
   if (cfg.track2 && !bottom && !cues.bottom.length) bottom = readText('.bpx-player-subtitle-wrap > div:nth-child(2) .bpx-player-subtitle-inner span');
 
   const activeLearnLang = getActiveLearnLang(cfg);
-  const effectivePinyin = (activeLearnLang === 'zh' || activeLearnLang === 'ja') && cfg.pinyinEnabled;
+  const meta = activeLearnLang ? LANG_META[activeLearnLang] : null;
+  const effectivePinyin = !!meta?.readingLabel && cfg.pinyinEnabled;
   const showPinyinChanged = effectivePinyin !== renderState.lastShowPinyin;
   if (showPinyinChanged) renderState.lastShowPinyin = effectivePinyin;
-  const effectiveSandhi = activeLearnLang === 'zh' && cfg.pinyinEnabled && cfg.sandhiEnabled;
+  const effectiveSandhi = !!meta?.sandhi && cfg.pinyinEnabled && cfg.sandhiEnabled;
   const toneSandhiChanged = effectiveSandhi !== renderState.lastSandhiEnabled;
   if (toneSandhiChanged) renderState.lastSandhiEnabled = effectiveSandhi;
 

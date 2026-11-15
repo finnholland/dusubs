@@ -4,6 +4,17 @@
 
 /** @typedef {'zh' | 'ja' | 'es'} LearnLang */
 
+/**
+ * Static per-language metadata. `readingLabel` is the popup label for the reading toggle
+ * (null = no reading support); `sandhi` enables the tone-colour toggle; `cjk` picks CJK subtitle styling.
+ * @type {Record<LearnLang, { label: string, cjk: boolean, readingLabel: string | null, sandhi: boolean }>}
+ */
+export const LANG_META = {
+  zh: { label: '中 Chinese', cjk: true, readingLabel: 'Pinyin', sandhi: true },
+  ja: { label: '日 Japanese', cjk: true, readingLabel: 'Furigana', sandhi: false },
+  es: { label: 'ES Spanish', cjk: false, readingLabel: null, sandhi: false },
+};
+
 /** @param {string} code @returns {LearnLang | 'en'} */
 export function detectLang(code) {
   if (/^zh/i.test(code)) return 'zh';
