@@ -3,17 +3,13 @@
 const browser = globalThis.browser ?? globalThis.chrome;
 
 /**
+ * Base language code from a timedtext URL (?lang= or ?tlang=), e.g. 'es-419' → 'es'.
  * @param {string} url
- * @returns {'zh' | 'en' | string}
+ * @returns {string | null}
  */
 function guessLang(url) {
-  const m = url.match(/[?&]lang=([^&]+)/i)
-    || url.match(/[?&]tlang=([^&]+)/i);
-  if (!m) return 'unknown';
-  const l = m[1].toLowerCase();
-  if (l.startsWith('zh')) return 'zh';
-  if (l.startsWith('en')) return 'en';
-  return l;
+  const m = url.match(/[?&]lang=([^&]+)/i) || url.match(/[?&]tlang=([^&]+)/i);
+  return m ? m[1].toLowerCase().split(/[-_]/)[0] : null;
 }
 
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -36,18 +32,18 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!langCode) return;
       const url = tracks?.[langCode];
       if (!url) {
-        console.log(`[HPF bg] no URL for lang ${langCode} — available:`, Object.keys(tracks || {}));
+        console.log(`[dusubs bg] no URL for lang ${langCode} — available:`, Object.keys(tracks || {}));
         return;
       }
-      console.log(`[HPF bg] fetching ${slot} (${langCode}):`, url.slice(0, 120));
+      console.log(`[dusubs bg] fetching ${slot} (${langCode}):`, url.slice(0, 120));
       try {
         const r = await fetch(url);
         const text = await r.text();
-        console.log(`[HPF bg] ${slot} status:`, r.status, 'length:', text.length);
+        console.log(`[dusubs bg] ${slot} status:`, r.status, 'length:', text.length);
         if (!r.ok || !text) return;
         browser.tabs.sendMessage(tabId, { type: 'subtitle-url', url, lang: slot }).catch(() => { });
       } catch (err) {
-        console.log(`[HPF bg] ${slot} exception:`, err);
+        console.log(`[dusubs bg] ${slot} exception:`, err);
       }
     };
 
@@ -60,13 +56,13 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 
-// Passive intercept — still useful if CC is already on
+// Passive intercept — still useful if CC is already on; the content script ignores languages it isn't showing
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     const { url, tabId } = details;
     if (tabId < 0) return;
     const lang = guessLang(url);
-    if (lang === 'zh' || lang === 'en') {
+    if (lang) {
       browser.tabs.sendMessage(tabId, { type: 'subtitle-url', url, lang }).catch(() => { });
     }
   },

@@ -70,6 +70,15 @@ window.addEventListener('yt-navigate-start', () => {
 });
 
 // ── Track data from MAIN world ─────────────────────────────────────────────
+/** @param {string} code e.g. 'es-419' → 'es' */
+const baseLang = code => code.split('-')[0].toLowerCase();
+
+/** First manually authored (not auto-generated) track in `lang`, or '' if none. */
+function pickTrack(/** @type {{ code: string }[]} */ tracks, /** @type {string} */ lang) {
+  if (!lang) return '';
+  return tracks.find(t => !t.code.includes('-x-ytbasr') && baseLang(t.code) === lang)?.code ?? '';
+}
+
 window.addEventListener(CHANNEL, (e) => {
   if (document.hidden) return;
   const { type, payload } = e.detail || {};
@@ -81,10 +90,9 @@ window.addEventListener(CHANNEL, (e) => {
   browser.storage.local.set({ availableTracks: localTracks }).catch(() => { });
   setLastTrackUrls(Object.fromEntries(tracks.map(t => [t.code, t.url])));
   if (!trackManuallySet) {
-    const tlist = /** @type {{ code: string }[]} */ (tracks);
-    const isReal = (/** @type {{ code: string }} */ t) => !t.code.includes('-x-ytbasr');
-    if (!cfg.track1) patchCfg({ track1: tlist.find(t => isReal(t) && t.code.startsWith('zh'))?.code || tlist.find(t => isReal(t) && t.code.startsWith('ja'))?.code || '' });
-    if (!cfg.track2) patchCfg({ track2: tlist.find(t => isReal(t) && t.code.startsWith('en'))?.code || '' });
+    // Only re-select languages the user has picked before; nothing is guessed.
+    if (!cfg.track1) patchCfg({ track1: pickTrack(tracks, cfg.track1Lang) });
+    if (!cfg.track2) patchCfg({ track2: pickTrack(tracks, cfg.track2Lang) });
     loadForActiveLang();
   }
   fetchSubtitles(lastTrackUrls);
@@ -131,6 +139,10 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     patchCfg({ track1: t1, track2: t2 });
     setTrackManuallySet(true);
     if (changed) {
+      // Remember the language of each choice (empty when a track is cleared) for future videos
+      const prefs = { track1Lang: baseLang(t1), track2Lang: baseLang(t2) };
+      patchCfg(prefs);
+      browser.storage.local.set(prefs);
       cues.top = []; cues.bottom = [];
       renderState.lastTop = ''; renderState.lastBottom = '';
       loadForActiveLang();

@@ -4,7 +4,8 @@
 /**
  * @typedef {{ fontScale: number, subPosition: number, track1: string, track2: string,
  *             track1Color: string, track2Color: string, stroke: boolean, window: boolean, shadow: boolean,
- *             learnEnabled: boolean, pinyinEnabled: boolean, sandhiEnabled: boolean }} Config
+ *             learnEnabled: boolean, pinyinEnabled: boolean, sandhiEnabled: boolean,
+ *             track1Lang: string, track2Lang: string }} Config track*Lang: language last picked per slot, used to auto-select next time
  * @typedef {{ start: number, end: number, text: string }} Cue
  */
 
@@ -20,6 +21,7 @@ export const DEFAULTS = {
   track1Color: '#ffffff', track2Color: '#ffe97a',
   stroke: true, window: false, shadow: false,
   learnEnabled: false, pinyinEnabled: true, sandhiEnabled: true,
+  track1Lang: '', track2Lang: '',
 };
 
 /** @type {Config} */
