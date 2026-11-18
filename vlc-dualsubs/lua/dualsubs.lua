@@ -28,12 +28,16 @@ function core.defaults()
     top_prefs = { "zh", "ja", "es" },
     bottom_prefs = { "en" },
     top_colour = "&H00FFFFFF",
-    bottom_colour = "&H0000FFFF",
+    bottom_colour = "&H007AE9FF",
     font = "Arial",
     font_size = 48,
     fonts = { zh = "Microsoft YaHei", ja = "Yu Gothic", es = "Arial", en = "Arial" },
     bold_langs = { zh = true, ja = true },
     font_scale = 100, -- percent
+    top_scale = 100, -- percent of the size above, per line
+    bottom_scale = 100,
+    ffmpeg_dir = "",
+    run_method = "popen", -- how external programs are launched: popen, vbs or min
     sub_position = 8, -- percent of the video height above the bottom edge
     stroke = true,
     window = false,
@@ -179,8 +183,12 @@ local function colour_tag(c)
   return "{\\c&H" .. c .. "&}"
 end
 
-local function style_tag(colour, lang, cfg)
+local function style_tag(colour, lang, cfg, line_scale)
   local tag = colour_tag(colour):sub(1, -2) .. "\\fn" .. core.font_for(cfg, lang)
+  if line_scale and line_scale ~= 100 then
+    local base = math.floor(cfg.font_size * cfg.font_scale / 100)
+    tag = tag .. "\\fs" .. math.floor(base * line_scale / 100)
+  end
   tag = tag .. (cfg.bold_langs[lang] and "\\b1" or "\\b0")
   return tag .. "}"
 end
@@ -243,8 +251,8 @@ function core.merge(top, bottom, top_lang, bottom_lang, cfg)
     core.style_line(cfg) .. "\n\n",
     "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
   }
-  local top_tag = style_tag(cfg.top_colour, top_lang, cfg)
-  local bot_tag = style_tag(cfg.bottom_colour, bottom_lang, cfg)
+  local top_tag = style_tag(cfg.top_colour, top_lang, cfg, cfg.top_scale)
+  local bot_tag = style_tag(cfg.bottom_colour, bottom_lang, cfg, cfg.bottom_scale)
   for i = 1, #points - 1 do
     local from, to = points[i], points[i + 1]
     local t, b = active(top, from), active(bottom, from)
@@ -343,6 +351,69 @@ function core.pick(tracks, prefs, exclude)
   end
 end
 
+-- Settings file: key=value lines.
+local number_keys = {
+  font_scale = { 50, 200 }, sub_position = { 0, 40 }, top_scale = { 50, 200 }, bottom_scale = { 50, 200 },
+}
+local bool_keys = { "stroke", "window", "shadow" }
+local colour_keys = { "top_colour", "bottom_colour" }
+local list_keys = { "top_prefs", "bottom_prefs" }
+
+function core.serialize_settings(cfg)
+  local out = {}
+  for k in pairs(number_keys) do out[#out + 1] = k .. "=" .. tostring(cfg[k]) end
+  for _, k in ipairs(bool_keys) do out[#out + 1] = k .. "=" .. (cfg[k] and "1" or "0") end
+  for _, k in ipairs(colour_keys) do out[#out + 1] = k .. "=" .. cfg[k] end
+  for _, k in ipairs(list_keys) do out[#out + 1] = k .. "=" .. table.concat(cfg[k], ",") end
+  out[#out + 1] = "ffmpeg_dir=" .. cfg.ffmpeg_dir
+  out[#out + 1] = "run_method=" .. cfg.run_method
+  table.sort(out)
+  return table.concat(out, "\n") .. "\n"
+end
+
+-- Reads settings text into cfg, ignoring unknown keys and out-of-range values.
+function core.parse_settings(text, cfg)
+  for line in ((text or ""):gsub("\r", "") .. "\n"):gmatch("(.-)\n") do
+    local k, v = line:match("^([%w_]+)=(.*)$")
+    if k then
+      if number_keys[k] then
+        local n = tonumber(v)
+        if n and n >= number_keys[k][1] and n <= number_keys[k][2] then cfg[k] = math.floor(n) end
+      elseif k == "stroke" or k == "window" or k == "shadow" then
+        cfg[k] = v == "1"
+      elseif k == "top_colour" or k == "bottom_colour" then
+        if v:match("^&H%x%x%x%x%x%x%x%x$") then cfg[k] = v end
+      elseif k == "top_prefs" or k == "bottom_prefs" then
+        local list = {}
+        for item in v:gmatch("[^,]+") do list[#list + 1] = item end
+        if #list > 0 then cfg[k] = list end
+      elseif k == "ffmpeg_dir" then
+        cfg.ffmpeg_dir = v
+      elseif k == "run_method" and (v == "popen" or v == "vbs" or v == "min") then
+        cfg.run_method = v
+      end
+    end
+  end
+  return cfg
+end
+
+-- Moves a language to the front of a preference list (no duplicates).
+local function with_first(list, lang)
+  local out = { lang }
+  for _, l in ipairs(list) do
+    if core.norm_lang(l) ~= lang then out[#out + 1] = l end
+  end
+  return out
+end
+
+-- Makes the languages of a picked pair the preferred ones next time.
+function core.remember_pick(cfg, top_lang, bottom_lang)
+  local t, b = core.norm_lang(top_lang), core.norm_lang(bottom_lang)
+  if t ~= "" and t ~= "und" then cfg.top_prefs = with_first(cfg.top_prefs, t) end
+  if b ~= "" and b ~= "und" then cfg.bottom_prefs = with_first(cfg.bottom_prefs, b) end
+  return cfg
+end
+
 -- Small non-cryptographic hash for cache file names.
 function core.hash(s)
   local h = 5381
@@ -357,12 +428,12 @@ end
 if _TEST then _TEST.core = core return end
 
 local dlg, widgets, tracks, cfg, media = nil, {}, {}, core.defaults(), nil
-local ffmpeg_dir = ""
+local diag = {} -- what each step did; shown when nothing is found
 
 function descriptor()
   return {
     title = "Dual subtitles",
-    version = "0.1",
+    version = "0.2",
     author = "dusubs",
     shortdesc = "Dual subtitles",
     description = "Show two subtitle tracks stacked in one.",
@@ -373,28 +444,116 @@ end
 -- Computed on demand: during the descriptor() scan VLC loads this file without
 -- the standard libraries, so nothing at top level may call into them.
 local function windows() return package.config:sub(1, 1) == "\\" end
-
+local function sep() return windows() and "\\" or "/" end
 local function dirname(p) return p:match("^(.*)[/\\][^/\\]*$") or "." end
 local function basename(p) return p:match("([^/\\]*)$") end
-local function sep() return windows() and "\\" or "/" end
+local function strip_trailing(d) return (d:gsub("[/\\]+$", "")) end
+
+----------------------------------------------------------------------------
+-- Files: vlc.io takes UTF-8 paths and starts no process.
+----------------------------------------------------------------------------
+
+local function read_file(path)
+  local f = vlc.io.open(path, "rb")
+  if not f then return nil end
+  local s = f:read("*a")
+  f:close()
+  return s or ""
+end
+
+local function write_file(path, data)
+  local f = vlc.io.open(path, "wb")
+  if not f then return false end
+  local ok = data == "" or f:write(data)
+  f:close()
+  return ok and true or false
+end
+
+-- File size, or nil (seek fails for files over 2 GB on Windows).
+local function file_size(path)
+  local f = vlc.io.open(path, "rb")
+  if not f then return nil end
+  local ok, n = pcall(f.seek, f, "end", 0)
+  f:close()
+  return ok and n or nil
+end
+
+local function remove_file(path) pcall(vlc.io.unlink, path) end
+
+local function temp_dir()
+  return strip_trailing(os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp")
+end
+
+local cache_path
+local function cache_dir()
+  if not cache_path then
+    local ok, base = pcall(vlc.config.cachedir)
+    cache_path = strip_trailing((ok and base and base ~= "") and base or temp_dir()) .. sep() .. "dualsubs"
+    pcall(vlc.io.mkdir, cache_path, "0755")
+  end
+  return cache_path
+end
+
+local function settings_path()
+  local ok, dir = pcall(vlc.config.userdatadir)
+  return strip_trailing((ok and dir and dir ~= "") and dir or cache_dir()) .. sep() .. "dualsubs.cfg"
+end
+
+local function load_settings()
+  local text = read_file(settings_path())
+  if text then core.parse_settings(text, cfg) end
+end
+
+local function save_settings()
+  if not write_file(settings_path(), core.serialize_settings(cfg)) then
+    diag[#diag + 1] = "could not write " .. settings_path()
+  end
+end
+
+----------------------------------------------------------------------------
+-- External programs. Every launch flashes a console in a GUI process, so the
+-- rest of the file avoids them: results are cached and both tracks are
+-- extracted by one ffmpeg call. run_method selects how the remaining ones start:
+--   popen: io.popen, falling back to os.execute with redirected output
+--   vbs:   a generated VBScript run by wscript, asking for a hidden window
+--   min:   cmd start /min /wait
+----------------------------------------------------------------------------
 
 local function shell_quote(s)
   if windows() then return '"' .. s:gsub('"', "") .. '"' end
   return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
-local diag = {} -- what each external command did, shown when nothing is found
-
-local function temp_dir()
-  return os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp"
+local function tool(name)
+  if cfg.ffmpeg_dir ~= "" then return shell_quote(cfg.ffmpeg_dir .. sep() .. name) end
+  return name
 end
 
--- Runs a command line and returns its output, or nil. io.popen is tried first;
--- it can fail in a GUI process on Windows, so fall back to os.execute with the
--- output redirected to a file.
+local function read_and_remove(path)
+  local out = read_file(path)
+  remove_file(path)
+  return out
+end
+
 local function run(cmd)
+  local out_file = cache_dir() .. sep() .. "out.txt"
+  remove_file(out_file)
+  local method = windows() and cfg.run_method or "popen"
   -- cmd.exe /c strips the outer quotes of a line that starts with a quote.
   local line = windows() and ('"' .. cmd .. '"') or cmd
+
+  if method == "vbs" then
+    local vbs = cache_dir() .. sep() .. "run.vbs"
+    local inner = '"' .. cmd .. ' > "' .. out_file .. '" 2>&1"'
+    local code = 'CreateObject("WScript.Shell").Run "cmd /c ' .. inner:gsub('"', '""') .. '", 0, True\r\n'
+    if not write_file(vbs, code) then diag[#diag + 1] = "cannot write " .. vbs return nil end
+    os.execute('wscript //B //Nologo "' .. vbs .. '"')
+    return read_and_remove(out_file)
+  elseif method == "min" then
+    os.execute('start "" /min /wait cmd /c "' .. cmd .. ' > "' .. out_file .. '" 2>&1"')
+    return read_and_remove(out_file)
+  end
+
   local ok, p = pcall(io.popen, line)
   if ok and p then
     local out = p:read("*a")
@@ -404,25 +563,19 @@ local function run(cmd)
   else
     diag[#diag + 1] = "popen failed: " .. tostring(p)
   end
-  local tmp = temp_dir() .. sep() .. "dualsubs-out.txt"
-  os.remove(tmp)
-  local full = windows() and ('"' .. cmd .. ' > "' .. tmp .. '" 2>&1"') or (cmd .. ' > "' .. tmp .. '" 2>&1')
-  local rc = os.execute(full)
-  local f = io.open(tmp, "rb")
-  if not f then
-    diag[#diag + 1] = "execute failed (" .. tostring(rc) .. "): " .. cmd:sub(1, 60)
-    return nil
-  end
-  local out = f:read("*a")
-  f:close()
-  os.remove(tmp)
-  if out == "" then diag[#diag + 1] = "execute gave no output for: " .. cmd:sub(1, 60) end
+  os.execute(windows() and ('"' .. cmd .. ' > "' .. out_file .. '" 2>&1"') or (cmd .. ' > "' .. out_file .. '" 2>&1'))
+  local out = read_and_remove(out_file)
+  if not out or out == "" then diag[#diag + 1] = "execute gave no output for: " .. cmd:sub(1, 60) end
   return out
 end
 
-local function tool(name)
-  if ffmpeg_dir ~= "" then return shell_quote(ffmpeg_dir .. sep() .. name) end
-  return name
+----------------------------------------------------------------------------
+-- Tracks
+----------------------------------------------------------------------------
+
+local function set_status(text)
+  if widgets.status then widgets.status:set_text(text) end
+  if dlg then dlg:update() end
 end
 
 local function media_path()
@@ -435,12 +588,20 @@ local function media_path()
   return "/" .. p
 end
 
-local function list_dir(dir)
-  local cmd = windows() and ('dir /b /a-d ' .. shell_quote(dir .. "\\*")) or ('ls -1 ' .. shell_quote(dir))
-  local out = run(cmd) or ""
-  local files = {}
-  for line in out:gmatch("[^\r\n]+") do files[#files + 1] = line end
-  return files
+-- Identifies the video for cache file names.
+local function media_key()
+  return core.hash(media .. (file_size(media) or 0))
+end
+
+-- ffprobe output for the video, from the cache when possible.
+local function probe()
+  local cached = cache_dir() .. sep() .. "probe-" .. media_key() .. ".txt"
+  local out = read_file(cached)
+  if out and out ~= "" then return out end
+  set_status("Reading tracks with ffprobe...")
+  out = run(tool("ffprobe") .. " -v error -select_streams s -show_entries stream=codec_name:stream_tags=language,title -of compact=p=0 " .. shell_quote(media))
+  if out and out:find("codec_name=", 1, true) then write_file(cached, out) end
+  return out
 end
 
 local function scan()
@@ -450,7 +611,10 @@ local function scan()
   if not media then return end
   diag[#diag + 1] = "video: " .. media
   local dir, base = dirname(media), basename(media):gsub("%.[^.]+$", "")
-  for _, f in ipairs(list_dir(dir)) do
+  local ok, names = pcall(vlc.io.readdir, dir)
+  if not (ok and type(names) == "table") then diag[#diag + 1] = "cannot list " .. dir names = {} end
+  table.sort(names)
+  for _, f in ipairs(names) do
     local ext = (f:match("%.([^.]+)$") or ""):lower()
     if text_exts[ext] and f:sub(1, #base):lower() == base:lower() then
       tracks[#tracks + 1] = {
@@ -459,9 +623,8 @@ local function scan()
       }
     end
   end
-  local nfiles = #tracks
-  diag[#diag + 1] = nfiles .. " sidecar file(s)"
-  local out = run(tool("ffprobe") .. " -v error -select_streams s -show_entries stream=codec_name:stream_tags=language,title -of compact=p=0 " .. shell_quote(media))
+  diag[#diag + 1] = #tracks .. " sidecar file(s)"
+  local out = probe()
   if out then
     diag[#diag + 1] = "ffprobe: " .. out:sub(1, 80):gsub("%s+", " ")
     for _, t in ipairs(core.parse_probe(out)) do
@@ -472,45 +635,59 @@ local function scan()
   end
 end
 
-local function read_file(path)
-  local f = io.open(path, "rb")
-  if not f then return nil end
-  local s = f:read("*a")
-  f:close()
-  return s
+-- Extracts the given embedded tracks to cached ASS files, one ffmpeg call for
+-- all that are missing. Returns true or nil, message.
+local function extract(list)
+  local key = media_key()
+  local args, n = {}, 0
+  for _, t in ipairs(list) do
+    t.cache = cache_dir() .. sep() .. "ex-" .. key .. "-" .. t.sub_index .. ".ass"
+    local have = read_file(t.cache)
+    if not have or have == "" then
+      n = n + 1
+      args[#args + 1] = " -map 0:s:" .. t.sub_index .. " -c:s ass -f ass " .. shell_quote(t.cache)
+    end
+  end
+  if n == 0 then return true end
+  set_status("Extracting " .. n .. " track" .. (n > 1 and "s" or "") .. " with ffmpeg...")
+  local out = run(tool("ffmpeg") .. " -y -v error -i " .. shell_quote(media) .. table.concat(args))
+  for _, t in ipairs(list) do
+    local have = read_file(t.cache)
+    if not have or have == "" then
+      return nil, "ffmpeg could not extract track " .. (t.sub_index + 1) .. ": " .. tostring(out or ""):sub(1, 120)
+    end
+  end
+  return true
 end
 
--- Events of a track: files are parsed directly, embedded tracks go through ffmpeg.
 local function events_for(t)
-  if t.kind == "file" then
-    local text = read_file(t.path)
-    if not text then return nil, "cannot read " .. t.path end
-    if t.codec == "srt" then return core.parse_srt(text) end
-    return core.parse_ass(text)
-  end
-  local tmp = temp_dir() .. sep() .. "dualsubs-extract-" .. core.hash(media .. t.sub_index) .. ".ass"
-  os.remove(tmp)
-  run(tool("ffmpeg") .. " -y -v error -i " .. shell_quote(media) .. " -map 0:s:" .. t.sub_index .. " -c:s ass -f ass " .. shell_quote(tmp))
-  local text = read_file(tmp)
-  if not text then return nil, "ffmpeg could not extract track " .. (t.sub_index + 1) end
-  os.remove(tmp)
+  local text = read_file(t.kind == "file" and t.path or t.cache)
+  if not text then return nil, "cannot read " .. (t.path or t.cache) end
+  if t.kind == "file" and t.codec == "srt" then return core.parse_srt(text) end
   return core.parse_ass(text)
 end
 
-local function set_status(text)
-  if widgets.status then widgets.status:set_text(text) end
-  if dlg then dlg:update() end
-end
+----------------------------------------------------------------------------
+-- Dialog
+----------------------------------------------------------------------------
+
+local method_names = { "popen", "vbs", "min" }
+local method_labels = {
+  popen = "Standard", vbs = "Hidden (VBScript)", min = "Minimised window",
+}
 
 local function read_settings()
   cfg.top_colour = core.palette[widgets.top_colour:get_value()][2]
   cfg.bottom_colour = core.palette[widgets.bottom_colour:get_value()][2]
   cfg.font_scale = widgets.size:get_value()
   cfg.sub_position = widgets.position:get_value()
+  cfg.top_scale = widgets.top_size:get_value()
+  cfg.bottom_scale = widgets.bottom_size:get_value()
   cfg.stroke = widgets.stroke:get_checked()
   cfg.window = widgets.window:get_checked()
   cfg.shadow = widgets.shadow:get_checked()
-  ffmpeg_dir = (widgets.ffmpeg:get_text() or ""):gsub('^%s+', ''):gsub('%s+$', '')
+  cfg.ffmpeg_dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+  cfg.run_method = method_names[widgets.launcher:get_value()] or "popen"
 end
 
 function apply()
@@ -519,6 +696,17 @@ function apply()
   local top, bottom = tracks[ti], tracks[bi]
   if not top or not bottom then set_status("Pick two tracks first.") return end
   if ti == bi then set_status("Pick two different tracks.") return end
+  diag = {}
+
+  local embedded = {}
+  for _, t in ipairs({ top, bottom }) do
+    if t.kind == "embedded" then embedded[#embedded + 1] = t end
+  end
+  if #embedded > 0 then
+    local ok, err = extract(embedded)
+    if not ok then set_status(err) return end
+  end
+
   set_status("Merging...")
   local te, err = events_for(top)
   if not te then set_status(err) return end
@@ -526,25 +714,29 @@ function apply()
   if not be then set_status(err2) return end
   local ass = core.merge(te, be, core.norm_lang(top.lang), core.norm_lang(bottom.lang), cfg)
   local path = temp_dir() .. sep() .. "dualsubs-" .. core.hash(ass) .. ".ass"
-  local f = io.open(path, "wb")
-  if not f then set_status("Cannot write " .. path) return end
-  f:write(ass)
-  f:close()
+  if not write_file(path, ass) then set_status("Cannot write " .. path) return end
   local ok, e = pcall(vlc.input.add_subtitle, path, true)
-  set_status(ok and "Applied." or ("VLC refused the subtitle: " .. tostring(e)))
+  if not ok then set_status("VLC refused the subtitle: " .. tostring(e)) return end
+
+  core.remember_pick(cfg, top.lang, bottom.lang)
+  save_settings()
+  set_status("Applied.")
 end
 
-function rescan()
-  scan()
-  fill_tracks()
+-- VLC dropdowns select the first value added and offer no way to change it,
+-- so the value to preselect goes first.
+local function add_default_first(w, values, default, suffix)
+  w:add_value(default .. suffix, default)
+  for _, v in ipairs(values) do
+    if v ~= default then w:add_value(v .. suffix, v) end
+  end
 end
 
-function fill_tracks()
+local function fill_tracks()
   local labels = core.labels(tracks)
   local ti = core.pick(tracks, cfg.top_prefs)
   local bi = core.pick(tracks, cfg.bottom_prefs, ti)
-  -- VLC dropdowns select the first value added and offer no way to change it,
-  -- so the preferred track goes first; ids stay the real track numbers.
+  -- ids stay the real track numbers; the preferred track is listed first
   local function fill(w, first)
     w:clear()
     if first then w:add_value(labels[first], first) end
@@ -560,35 +752,40 @@ function fill_tracks()
   else
     set_status(#tracks .. " subtitle tracks found.")
   end
-  if dlg then dlg:update() end
 end
 
--- Dropdowns select their first value, so the default goes first.
-function add_default_first(w, values, default, suffix)
-  w:add_value(default .. suffix, default)
-  for _, v in ipairs(values) do
-    if v ~= default then w:add_value(v .. suffix, v) end
-  end
+function rescan()
+  scan()
+  fill_tracks()
 end
 
 function activate()
+  load_settings()
   dlg = vlc.dialog("Dual subtitles")
   dlg:add_label("Top line", 1, 1, 1, 1)
   widgets.top = dlg:add_dropdown(2, 1, 3, 1)
   dlg:add_label("Bottom line", 1, 2, 1, 1)
   widgets.bottom = dlg:add_dropdown(2, 2, 3, 1)
 
+  local sizes = { 50, 75, 100, 125, 150, 175, 200 }
   dlg:add_label("Size", 1, 3, 1, 1)
   widgets.size = dlg:add_dropdown(2, 3, 1, 1)
-  add_default_first(widgets.size, { 75, 100, 125, 150, 175 }, cfg.font_scale, "%")
+  add_default_first(widgets.size, sizes, cfg.font_scale, "%")
   dlg:add_label("Position", 3, 3, 1, 1)
   widgets.position = dlg:add_dropdown(4, 3, 1, 1)
   add_default_first(widgets.position, { 0, 8, 15, 25, 35 }, cfg.sub_position, "%")
 
-  dlg:add_label("Top colour", 1, 4, 1, 1)
-  widgets.top_colour = dlg:add_dropdown(2, 4, 1, 1)
-  dlg:add_label("Bottom colour", 3, 4, 1, 1)
-  widgets.bottom_colour = dlg:add_dropdown(4, 4, 1, 1)
+  dlg:add_label("Top size", 1, 4, 1, 1)
+  widgets.top_size = dlg:add_dropdown(2, 4, 1, 1)
+  add_default_first(widgets.top_size, sizes, cfg.top_scale, "%")
+  dlg:add_label("Bottom size", 3, 4, 1, 1)
+  widgets.bottom_size = dlg:add_dropdown(4, 4, 1, 1)
+  add_default_first(widgets.bottom_size, sizes, cfg.bottom_scale, "%")
+
+  dlg:add_label("Top colour", 1, 5, 1, 1)
+  widgets.top_colour = dlg:add_dropdown(2, 5, 1, 1)
+  dlg:add_label("Bottom colour", 3, 5, 1, 1)
+  widgets.bottom_colour = dlg:add_dropdown(4, 5, 1, 1)
   local function colour_index(c)
     for i, p in ipairs(core.palette) do if p[2] == c then return i end end
     return 1
@@ -601,16 +798,24 @@ function activate()
     end
   end
 
-  widgets.stroke = dlg:add_check_box("Stroke", cfg.stroke, 1, 5, 1, 1)
-  widgets.window = dlg:add_check_box("Window", cfg.window, 2, 5, 1, 1)
-  widgets.shadow = dlg:add_check_box("Shadow", cfg.shadow, 3, 5, 1, 1)
+  widgets.stroke = dlg:add_check_box("Stroke", cfg.stroke, 1, 6, 1, 1)
+  widgets.window = dlg:add_check_box("Window", cfg.window, 2, 6, 1, 1)
+  widgets.shadow = dlg:add_check_box("Shadow", cfg.shadow, 3, 6, 1, 1)
 
-  dlg:add_label("ffmpeg folder", 1, 6, 1, 1)
-  widgets.ffmpeg = dlg:add_text_input("", 2, 6, 3, 1)
+  dlg:add_label("ffmpeg folder", 1, 7, 1, 1)
+  widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir, 2, 7, 3, 1)
+  dlg:add_label("Launcher (test)", 1, 8, 1, 1)
+  widgets.launcher = dlg:add_dropdown(2, 8, 3, 1)
+  local first = 1
+  for i, m in ipairs(method_names) do if m == cfg.run_method then first = i end end
+  widgets.launcher:add_value(method_labels[method_names[first]], first)
+  for i, m in ipairs(method_names) do
+    if i ~= first then widgets.launcher:add_value(method_labels[m], i) end
+  end
 
-  dlg:add_button("Rescan", rescan, 1, 7, 1, 1)
-  dlg:add_button("Apply", apply, 2, 7, 3, 1)
-  widgets.status = dlg:add_label("", 1, 8, 4, 1)
+  dlg:add_button("Rescan", rescan, 1, 9, 1, 1)
+  dlg:add_button("Apply", apply, 2, 9, 3, 1)
+  widgets.status = dlg:add_label("", 1, 10, 4, 1)
   rescan()
 end
 

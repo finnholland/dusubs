@@ -29,6 +29,7 @@ Dialogue: 0,0:00:01.50,0:00:03.00,Default,,0,0,0,,Hello
 Dialogue: 0,0:00:06.00,0:00:09.00,Default,,0,0,0,,{\pos(10,10)}Hello, world
 ]]
 local cfg = core.defaults()
+cfg.bottom_colour = "&H0000FFFF" -- the Go default, which the parity checks compare against
 local out = core.merge(core.parse_ass(top_sample), core.parse_ass(bot_sample), "zh", "en", cfg)
 local lines = {}
 for l in out:gmatch("[^\n]+") do if l:sub(1, 9) == "Dialogue:" then lines[#lines + 1] = l end end
@@ -79,12 +80,42 @@ eq(#pt, 2, "probe skips bitmap")
 eq(pt[1].title, "Signs & Songs", "probe title")
 eq(pt[2].order, 2, "probe keeps the ffmpeg stream ordinal")
 
+-- Independent line sizes: no \fs tag at 100%, otherwise base size * scale
+local sized = core.defaults()
+sized.top_scale, sized.bottom_scale = 125, 75
+local m = core.merge(core.parse_ass(top_sample), core.parse_ass(bot_sample), "zh", "en", sized)
+eq(m:find("\\fs60\\b1}", 1, true) ~= nil, true, "top size tag (48 * 125%)")
+eq(m:find("\\fs36\\b0}", 1, true) ~= nil, true, "bottom size tag (48 * 75%)")
+eq(core.merge(core.parse_ass(top_sample), core.parse_ass(bot_sample), "zh", "en", core.defaults()):find("\\fs", 1, true), nil,
+  "no size tag at defaults")
+
+-- Settings round trip and validation
+local saved = core.defaults()
+saved.font_scale, saved.top_scale, saved.window, saved.ffmpeg_dir = 150, 125, true, "C:\\tools\\ffmpeg"
+saved.top_prefs = { "ja", "zh" }
+saved.run_method = "vbs"
+local loaded = core.parse_settings(core.serialize_settings(saved), core.defaults())
+eq(core.serialize_settings(loaded), core.serialize_settings(saved), "settings round trip")
+eq(loaded.ffmpeg_dir, "C:\\tools\\ffmpeg", "ffmpeg dir kept")
+local bad = core.parse_settings("font_scale=9999\nstroke=0\ntop_colour=red\nrun_method=rm\nunknown=1\n", core.defaults())
+eq(bad.font_scale, 100, "out-of-range number ignored")
+eq(bad.stroke, false, "bool read")
+eq(bad.top_colour, "&H00FFFFFF", "bad colour ignored")
+eq(bad.run_method, "popen", "bad launcher ignored")
+
+-- Remembering the picked pair
+local pref = core.remember_pick(core.defaults(), "eng", "spa")
+eq(table.concat(pref.top_prefs, ","), "en,zh,ja,es", "top pref moved to front")
+eq(table.concat(pref.bottom_prefs, ","), "es,en", "bottom pref moved to front")
+eq(table.concat(core.remember_pick(core.defaults(), "und", "").top_prefs, ","), "zh,ja,es", "und and empty skipped")
+
 -- Byte-for-byte parity with the Go implementation
 local dir = arg and arg[1]
 if dir then
   local function read(p) local f = assert(io.open(dir .. "/" .. p, "rb")) local s = f:read("*a") f:close() return s end
   local t, b = core.parse_ass(read("top.ass")), core.parse_ass(read("bot.ass"))
   local c = core.defaults()
+  c.bottom_colour = "&H0000FFFF"
   eq(core.merge(t, b, "zh", "en", c), read("golden.ass"), "golden parity")
   c.window, c.shadow, c.font_scale, c.sub_position = true, true, 150, 20
   eq(core.merge(t, b, "zh", "en", c), read("golden2.ass"), "golden parity (window/shadow/150%/20%)")
