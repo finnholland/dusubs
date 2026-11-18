@@ -93,15 +93,13 @@ eq(core.merge(core.parse_ass(top_sample), core.parse_ass(bot_sample), "zh", "en"
 local saved = core.defaults()
 saved.font_scale, saved.top_scale, saved.window, saved.ffmpeg_dir = 150, 125, true, "C:\\tools\\ffmpeg"
 saved.top_prefs = { "ja", "zh" }
-saved.run_method = "vbs"
 local loaded = core.parse_settings(core.serialize_settings(saved), core.defaults())
 eq(core.serialize_settings(loaded), core.serialize_settings(saved), "settings round trip")
 eq(loaded.ffmpeg_dir, "C:\\tools\\ffmpeg", "ffmpeg dir kept")
-local bad = core.parse_settings("font_scale=9999\nstroke=0\ntop_colour=red\nrun_method=rm\nunknown=1\n", core.defaults())
+local bad = core.parse_settings("font_scale=9999\nstroke=0\ntop_colour=red\nunknown=1\n", core.defaults())
 eq(bad.font_scale, 100, "out-of-range number ignored")
 eq(bad.stroke, false, "bool read")
 eq(bad.top_colour, "&H00FFFFFF", "bad colour ignored")
-eq(bad.run_method, "popen", "bad launcher ignored")
 
 -- Remembering the picked pair
 local pref = core.remember_pick(core.defaults(), "eng", "spa")

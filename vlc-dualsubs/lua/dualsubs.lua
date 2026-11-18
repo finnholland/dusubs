@@ -37,7 +37,6 @@ function core.defaults()
     top_scale = 100, -- percent of the size above, per line
     bottom_scale = 100,
     ffmpeg_dir = "",
-    run_method = "popen", -- how external programs are launched: popen, vbs or min
     sub_position = 8, -- percent of the video height above the bottom edge
     stroke = true,
     window = false,
@@ -366,7 +365,6 @@ function core.serialize_settings(cfg)
   for _, k in ipairs(colour_keys) do out[#out + 1] = k .. "=" .. cfg[k] end
   for _, k in ipairs(list_keys) do out[#out + 1] = k .. "=" .. table.concat(cfg[k], ",") end
   out[#out + 1] = "ffmpeg_dir=" .. cfg.ffmpeg_dir
-  out[#out + 1] = "run_method=" .. cfg.run_method
   table.sort(out)
   return table.concat(out, "\n") .. "\n"
 end
@@ -389,8 +387,6 @@ function core.parse_settings(text, cfg)
         if #list > 0 then cfg[k] = list end
       elseif k == "ffmpeg_dir" then
         cfg.ffmpeg_dir = v
-      elseif k == "run_method" and (v == "popen" or v == "vbs" or v == "min") then
-        cfg.run_method = v
       end
     end
   end
@@ -433,7 +429,7 @@ local diag = {} -- what each step did; shown when nothing is found
 function descriptor()
   return {
     title = "Dual subtitles",
-    version = "0.2",
+    version = "0.3",
     author = "dusubs",
     shortdesc = "Dual subtitles",
     description = "Show two subtitle tracks stacked in one.",
@@ -484,6 +480,33 @@ local function temp_dir()
   return strip_trailing(os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp")
 end
 
+-- Merged files written for the current video. Settings live in dualsubs.cfg,
+-- so these are disposable: the previous one goes on each Apply, the rest when
+-- the video changes or the extension closes, and leftovers from crashed
+-- sessions are swept on activate.
+local merged_files = {}
+
+local function is_merged_name(f)
+  return f:match("^dualsubs%-%w+%.ass$") ~= nil
+end
+
+local function clear_merged(keep)
+  local left = {}
+  for _, p in ipairs(merged_files) do
+    if p == keep then left[#left + 1] = p else remove_file(p) end
+  end
+  merged_files = left
+end
+
+local function sweep_stale_merged()
+  local dir = temp_dir()
+  local ok, names = pcall(vlc.io.readdir, dir)
+  if not (ok and type(names) == "table") then return end
+  for _, f in ipairs(names) do
+    if is_merged_name(f) then remove_file(dir .. sep() .. f) end
+  end
+end
+
 local cache_path
 local function cache_dir()
   if not cache_path then
@@ -513,10 +536,9 @@ end
 ----------------------------------------------------------------------------
 -- External programs. Every launch flashes a console in a GUI process, so the
 -- rest of the file avoids them: results are cached and both tracks are
--- extracted by one ffmpeg call. run_method selects how the remaining ones start:
---   popen: io.popen, falling back to os.execute with redirected output
---   vbs:   a generated VBScript run by wscript, asking for a hidden window
---   min:   cmd start /min /wait
+-- extracted by one ffmpeg call. On Windows the remaining launches go through a
+-- generated VBScript run by wscript with a hidden window; elsewhere (no console
+-- flash) and when that fails, io.popen is used.
 ----------------------------------------------------------------------------
 
 local function shell_quote(s)
@@ -538,35 +560,32 @@ end
 local function run(cmd)
   local out_file = cache_dir() .. sep() .. "out.txt"
   remove_file(out_file)
-  local method = windows() and cfg.run_method or "popen"
-  -- cmd.exe /c strips the outer quotes of a line that starts with a quote.
-  local line = windows() and ('"' .. cmd .. '"') or cmd
 
-  if method == "vbs" then
+  if windows() then
     local vbs = cache_dir() .. sep() .. "run.vbs"
     local inner = '"' .. cmd .. ' > "' .. out_file .. '" 2>&1"'
     local code = 'CreateObject("WScript.Shell").Run "cmd /c ' .. inner:gsub('"', '""') .. '", 0, True\r\n'
-    if not write_file(vbs, code) then diag[#diag + 1] = "cannot write " .. vbs return nil end
-    os.execute('wscript //B //Nologo "' .. vbs .. '"')
-    return read_and_remove(out_file)
-  elseif method == "min" then
-    os.execute('start "" /min /wait cmd /c "' .. cmd .. ' > "' .. out_file .. '" 2>&1"')
-    return read_and_remove(out_file)
+    if write_file(vbs, code) then
+      os.execute('wscript //B //Nologo "' .. vbs .. '"')
+      local out = read_and_remove(out_file)
+      -- ffmpeg prints nothing on success; the redirect still creates the file,
+      -- so a missing file (not an empty one) means the launch itself failed.
+      if out then return out end
+      diag[#diag + 1] = "hidden launch produced no output file, trying popen"
+    end
   end
 
-  local ok, p = pcall(io.popen, line)
+  -- cmd.exe /c strips the outer quotes of a line that starts with a quote.
+  local ok, p = pcall(io.popen, windows() and ('"' .. cmd .. '"') or cmd)
   if ok and p then
     local out = p:read("*a")
     p:close()
     if out and out ~= "" then return out end
-    diag[#diag + 1] = "popen gave no output for: " .. cmd:sub(1, 60)
   else
     diag[#diag + 1] = "popen failed: " .. tostring(p)
   end
-  os.execute(windows() and ('"' .. cmd .. ' > "' .. out_file .. '" 2>&1"') or (cmd .. ' > "' .. out_file .. '" 2>&1'))
-  local out = read_and_remove(out_file)
-  if not out or out == "" then diag[#diag + 1] = "execute gave no output for: " .. cmd:sub(1, 60) end
-  return out
+  diag[#diag + 1] = "no output for: " .. cmd:sub(1, 60)
+  return nil
 end
 
 ----------------------------------------------------------------------------
@@ -671,15 +690,9 @@ end
 -- Dialog
 ----------------------------------------------------------------------------
 
-local method_names = { "popen", "vbs", "min" }
-local method_labels = {
-  popen = "Standard", vbs = "Hidden (VBScript)", min = "Minimised window",
-}
-
 local function read_settings()
   cfg.top_colour = core.palette[widgets.top_colour:get_value()][2]
   cfg.bottom_colour = core.palette[widgets.bottom_colour:get_value()][2]
-  cfg.font_scale = widgets.size:get_value()
   cfg.sub_position = widgets.position:get_value()
   cfg.top_scale = widgets.top_size:get_value()
   cfg.bottom_scale = widgets.bottom_size:get_value()
@@ -687,7 +700,6 @@ local function read_settings()
   cfg.window = widgets.window:get_checked()
   cfg.shadow = widgets.shadow:get_checked()
   cfg.ffmpeg_dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
-  cfg.run_method = method_names[widgets.launcher:get_value()] or "popen"
 end
 
 function apply()
@@ -717,6 +729,8 @@ function apply()
   if not write_file(path, ass) then set_status("Cannot write " .. path) return end
   local ok, e = pcall(vlc.input.add_subtitle, path, true)
   if not ok then set_status("VLC refused the subtitle: " .. tostring(e)) return end
+  merged_files[#merged_files + 1] = path
+  clear_merged(path)
 
   core.remember_pick(cfg, top.lang, bottom.lang)
   save_settings()
@@ -761,18 +775,18 @@ end
 
 function activate()
   load_settings()
+  sweep_stale_merged()
   dlg = vlc.dialog("Dual subtitles")
   dlg:add_label("Top line", 1, 1, 1, 1)
   widgets.top = dlg:add_dropdown(2, 1, 3, 1)
   dlg:add_label("Bottom line", 1, 2, 1, 1)
   widgets.bottom = dlg:add_dropdown(2, 2, 3, 1)
 
+  -- Sizes are percentages of a base size that scales with the picture height
+  -- (ASS PlayResY 1080), so readability does not depend on the video resolution.
   local sizes = { 50, 75, 100, 125, 150, 175, 200 }
-  dlg:add_label("Size", 1, 3, 1, 1)
-  widgets.size = dlg:add_dropdown(2, 3, 1, 1)
-  add_default_first(widgets.size, sizes, cfg.font_scale, "%")
-  dlg:add_label("Position", 3, 3, 1, 1)
-  widgets.position = dlg:add_dropdown(4, 3, 1, 1)
+  dlg:add_label("Position", 1, 3, 1, 1)
+  widgets.position = dlg:add_dropdown(2, 3, 1, 1)
   add_default_first(widgets.position, { 0, 8, 15, 25, 35 }, cfg.sub_position, "%")
 
   dlg:add_label("Top size", 1, 4, 1, 1)
@@ -804,25 +818,20 @@ function activate()
 
   dlg:add_label("ffmpeg folder", 1, 7, 1, 1)
   widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir, 2, 7, 3, 1)
-  dlg:add_label("Launcher (test)", 1, 8, 1, 1)
-  widgets.launcher = dlg:add_dropdown(2, 8, 3, 1)
-  local first = 1
-  for i, m in ipairs(method_names) do if m == cfg.run_method then first = i end end
-  widgets.launcher:add_value(method_labels[method_names[first]], first)
-  for i, m in ipairs(method_names) do
-    if i ~= first then widgets.launcher:add_value(method_labels[m], i) end
-  end
-
-  dlg:add_button("Rescan", rescan, 1, 9, 1, 1)
-  dlg:add_button("Apply", apply, 2, 9, 3, 1)
-  widgets.status = dlg:add_label("", 1, 10, 4, 1)
+  dlg:add_button("Rescan", rescan, 1, 8, 1, 1)
+  dlg:add_button("Apply", apply, 2, 8, 3, 1)
+  widgets.status = dlg:add_label("", 1, 9, 4, 1)
   rescan()
 end
 
 function deactivate()
+  clear_merged()
   if dlg then dlg:delete() dlg = nil end
 end
 
 function close() vlc.deactivate() end
 
-function input_changed() if dlg then rescan() end end
+function input_changed()
+  clear_merged() -- the merged file belongs to the previous video
+  if dlg then rescan() end
+end
