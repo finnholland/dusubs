@@ -6,7 +6,9 @@ text tracks extracted with ffmpeg) into one generated ASS file and loads it
 with vlc.input.add_subtitle. The merge logic is a port of merge.go.
 
 Install: copy this file to %APPDATA%\vlc\lua\extensions\ and restart VLC, then
-use View > Dual subtitles.
+use View > Dual subtitles. VLC has no way to start an extension by itself, so
+open it once per VLC launch; with Auto-apply ticked it then stays active when
+the window is closed and applies the remembered pair to every video.
 ]]
 
 local core = {} -- pure functions, no VLC calls (tested by test_dualsubs.lua)
@@ -27,6 +29,10 @@ function core.defaults()
   return {
     top_prefs = { "zh", "ja", "es" },
     bottom_prefs = { "en" },
+    top_title = "", -- title of the last picked track, tells apart tracks of one language
+    bottom_title = "",
+    top_nth = 0, -- position among the tracks of the same language, for tracks without a title
+    bottom_nth = 0,
     top_colour = "&H00FFFFFF",
     bottom_colour = "&H007AE9FF",
     font = "Arial",
@@ -41,6 +47,7 @@ function core.defaults()
     stroke = true,
     window = false,
     shadow = false,
+    auto = false, -- apply the remembered pair to every video that starts
   }
 end
 
@@ -340,21 +347,48 @@ function core.labels(tracks)
   return out
 end
 
+-- Position of track `t` among the tracks of its language (1-based).
+function core.lang_ordinal(tracks, t)
+  local want, n = core.norm_lang(t.lang), 0
+  for _, x in ipairs(tracks) do
+    if core.norm_lang(x.lang) == want then n = n + 1 end
+    if x == t then return n end
+  end
+  return 0
+end
+
 -- First track matching the preferred languages in order, never `exclude`.
-function core.pick(tracks, prefs, exclude)
+-- Among tracks of one language, a remembered title (worth 2) and a remembered
+-- position within the language (worth 1) pick the best one; ties go to the first.
+function core.pick(tracks, prefs, exclude, title, nth)
+  local remembered = (title and title ~= "") or (nth and nth > 0)
   for _, p in ipairs(prefs) do
     local want = core.norm_lang(p)
+    local best, best_score, k = nil, -1, 0
     for i, t in ipairs(tracks) do
-      if i ~= exclude and core.norm_lang(t.lang) == want then return i end
+      if core.norm_lang(t.lang) == want then
+        k = k + 1
+        if i ~= exclude then
+          local score = 0
+          if remembered then
+            if (t.title or "") == (title or "") then score = score + 2 end
+            if k == nth then score = score + 1 end
+          end
+          -- with nothing better known, avoid forced-only tracks
+          if score < 2 and (t.title or ""):lower():find("forced", 1, true) then score = score - 0.5 end
+          if score > best_score then best, best_score = i, score end
+        end
+      end
     end
+    if best then return best end
   end
 end
 
 -- Settings file: key=value lines.
 local number_keys = {
-  font_scale = { 50, 200 }, sub_position = { 0, 40 }, top_scale = { 50, 200 }, bottom_scale = { 50, 200 },
+  font_scale = { 50, 200 }, sub_position = { 0, 40 }, top_nth = { 0, 1000 }, bottom_nth = { 0, 1000 }, top_scale = { 50, 200 }, bottom_scale = { 50, 200 },
 }
-local bool_keys = { "stroke", "window", "shadow" }
+local bool_keys = { "stroke", "window", "shadow", "auto" }
 local colour_keys = { "top_colour", "bottom_colour" }
 local list_keys = { "top_prefs", "bottom_prefs" }
 
@@ -365,6 +399,8 @@ function core.serialize_settings(cfg)
   for _, k in ipairs(colour_keys) do out[#out + 1] = k .. "=" .. cfg[k] end
   for _, k in ipairs(list_keys) do out[#out + 1] = k .. "=" .. table.concat(cfg[k], ",") end
   out[#out + 1] = "ffmpeg_dir=" .. cfg.ffmpeg_dir
+  out[#out + 1] = "top_title=" .. (cfg.top_title or ""):gsub("[\r\n]", " ")
+  out[#out + 1] = "bottom_title=" .. (cfg.bottom_title or ""):gsub("[\r\n]", " ")
   table.sort(out)
   return table.concat(out, "\n") .. "\n"
 end
@@ -377,7 +413,7 @@ function core.parse_settings(text, cfg)
       if number_keys[k] then
         local n = tonumber(v)
         if n and n >= number_keys[k][1] and n <= number_keys[k][2] then cfg[k] = math.floor(n) end
-      elseif k == "stroke" or k == "window" or k == "shadow" then
+      elseif k == "stroke" or k == "window" or k == "shadow" or k == "auto" then
         cfg[k] = v == "1"
       elseif k == "top_colour" or k == "bottom_colour" then
         if v:match("^&H%x%x%x%x%x%x%x%x$") then cfg[k] = v end
@@ -387,6 +423,8 @@ function core.parse_settings(text, cfg)
         if #list > 0 then cfg[k] = list end
       elseif k == "ffmpeg_dir" then
         cfg.ffmpeg_dir = v
+      elseif k == "top_title" or k == "bottom_title" then
+        cfg[k] = v
       end
     end
   end
@@ -403,7 +441,9 @@ local function with_first(list, lang)
 end
 
 -- Makes the languages of a picked pair the preferred ones next time.
-function core.remember_pick(cfg, top_lang, bottom_lang)
+function core.remember_pick(cfg, top_lang, bottom_lang, top_title, bottom_title, top_nth, bottom_nth)
+  cfg.top_nth, cfg.bottom_nth = top_nth or 0, bottom_nth or 0
+  cfg.top_title, cfg.bottom_title = top_title or "", bottom_title or ""
   local t, b = core.norm_lang(top_lang), core.norm_lang(bottom_lang)
   if t ~= "" and t ~= "und" then cfg.top_prefs = with_first(cfg.top_prefs, t) end
   if b ~= "" and b ~= "und" then cfg.bottom_prefs = with_first(cfg.bottom_prefs, b) end
@@ -699,6 +739,7 @@ local function read_settings()
   cfg.stroke = widgets.stroke:get_checked()
   cfg.window = widgets.window:get_checked()
   cfg.shadow = widgets.shadow:get_checked()
+  cfg.auto = widgets.auto:get_checked()
   cfg.ffmpeg_dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
@@ -732,7 +773,8 @@ function apply()
   merged_files[#merged_files + 1] = path
   clear_merged(path)
 
-  core.remember_pick(cfg, top.lang, bottom.lang)
+  core.remember_pick(cfg, top.lang, bottom.lang, top.title, bottom.title,
+    core.lang_ordinal(tracks, top), core.lang_ordinal(tracks, bottom))
   save_settings()
   set_status("Applied.")
 end
@@ -748,8 +790,8 @@ end
 
 local function fill_tracks()
   local labels = core.labels(tracks)
-  local ti = core.pick(tracks, cfg.top_prefs)
-  local bi = core.pick(tracks, cfg.bottom_prefs, ti)
+  local ti = core.pick(tracks, cfg.top_prefs, nil, cfg.top_title, cfg.top_nth)
+  local bi = core.pick(tracks, cfg.bottom_prefs, ti, cfg.bottom_title, cfg.bottom_nth)
   -- ids stay the real track numbers; the preferred track is listed first
   local function fill(w, first)
     w:clear()
@@ -815,6 +857,7 @@ function activate()
   widgets.stroke = dlg:add_check_box("Stroke", cfg.stroke, 1, 6, 1, 1)
   widgets.window = dlg:add_check_box("Window", cfg.window, 2, 6, 1, 1)
   widgets.shadow = dlg:add_check_box("Shadow", cfg.shadow, 3, 6, 1, 1)
+  widgets.auto = dlg:add_check_box("Auto-apply", cfg.auto, 4, 6, 1, 1)
 
   dlg:add_label("ffmpeg folder", 1, 7, 1, 1)
   widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir, 2, 7, 3, 1)
@@ -829,9 +872,21 @@ function deactivate()
   if dlg then dlg:delete() dlg = nil end
 end
 
-function close() vlc.deactivate() end
+-- With auto-apply on, closing the window only hides it: deactivating would
+-- stop the extension from seeing the next video.
+function close()
+  if dlg and widgets.auto and widgets.auto:get_checked() then
+    read_settings()
+    save_settings()
+    dlg:hide()
+  else
+    vlc.deactivate()
+  end
+end
 
 function input_changed()
   clear_merged() -- the merged file belongs to the previous video
-  if dlg then rescan() end
+  if not dlg then return end
+  rescan()
+  if widgets.auto:get_checked() and #tracks > 0 then apply() end
 end
