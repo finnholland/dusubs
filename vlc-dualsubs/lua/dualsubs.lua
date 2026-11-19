@@ -473,7 +473,7 @@ function descriptor()
     author = "dusubs",
     shortdesc = "Dual subtitles",
     description = "Show two subtitle tracks stacked in one.",
-    capabilities = { "input-listener" },
+    capabilities = { "menu", "input-listener" },
   }
 end
 
@@ -637,8 +637,58 @@ local function set_status(text)
   if dlg then dlg:update() end
 end
 
+-- VLC 4 replaced vlc.input with vlc.player.
+local function current_item()
+  if vlc.input and vlc.input.item then return vlc.input.item() end
+  return vlc.player.item()
+end
+
+local function spu_ids()
+  local ids = {}
+  local ok, list = pcall(vlc.player.get_spu_tracks)
+  if ok and type(list) == "table" then
+    for _, t in pairs(list) do
+      if type(t) == "table" and t.id then ids[t.id] = t end
+    end
+  end
+  return ids
+end
+
+-- vlc.misc is missing from extensions in VLC 4, so wait by spinning on the
+-- clock (extensions run on their own thread, the player is not blocked).
+local function pause(seconds)
+  if vlc.misc and vlc.misc.mwait then
+    vlc.misc.mwait(vlc.misc.mdate() + seconds * 1000000)
+    return
+  end
+  local t = os.clock()
+  while os.clock() - t < seconds do end
+end
+
+-- VLC 4 adds the track asynchronously and does not always select it, so wait
+-- for the new track to appear and toggle it on.
+local function select_new_track(before)
+  for _ = 1, 60 do
+    for id, t in pairs(spu_ids()) do
+      if not before[id] then
+        if not t.selected then pcall(vlc.player.toggle_spu_track, id) end
+        return
+      end
+    end
+    pause(0.05)
+  end
+end
+
+local function add_subtitle(path)
+  if vlc.input and vlc.input.add_subtitle then return vlc.input.add_subtitle(path, true) end
+  local before = spu_ids()
+  local r = vlc.player.add_subtitle(path, true)
+  pcall(select_new_track, before)
+  return r
+end
+
 local function media_path()
-  local item = vlc.input.item()
+  local item = current_item()
   if not item then return nil end
   local uri = item:uri()
   if not uri:match("^file:///") then return nil end
@@ -768,7 +818,7 @@ function apply()
   local ass = core.merge(te, be, core.norm_lang(top.lang), core.norm_lang(bottom.lang), cfg)
   local path = temp_dir() .. sep() .. "dualsubs-" .. core.hash(ass) .. ".ass"
   if not write_file(path, ass) then set_status("Cannot write " .. path) return end
-  local ok, e = pcall(vlc.input.add_subtitle, path, true)
+  local ok, e = pcall(add_subtitle, path)
   if not ok then set_status("VLC refused the subtitle: " .. tostring(e)) return end
   merged_files[#merged_files + 1] = path
   clear_merged(path)
@@ -815,7 +865,7 @@ function rescan()
   fill_tracks()
 end
 
-function activate()
+local function activate_body()
   load_settings()
   sweep_stale_merged()
   dlg = vlc.dialog("Dual subtitles")
@@ -865,6 +915,19 @@ function activate()
   dlg:add_button("Apply", apply, 2, 8, 3, 1)
   widgets.status = dlg:add_label("", 1, 9, 4, 1)
   rescan()
+  -- opened while a video is already playing: input_changed will not fire for it
+  if cfg.auto and #tracks > 0 then apply() end
+end
+
+-- Errors inside activate are swallowed silently by VLC 4's extension loader,
+-- so log them (Tools > Messages) and show them in a dialog.
+function activate()
+  local ok, err = xpcall(activate_body, debug and debug.traceback or tostring)
+  if not ok then
+    vlc.msg.err("dualsubs activate failed: " .. tostring(err))
+    if not dlg then dlg = vlc.dialog("Dual subtitles") end
+    dlg:add_label("Error: " .. tostring(err):sub(1, 300), 1, 1, 1, 1)
+  end
 end
 
 function deactivate()
@@ -882,6 +945,17 @@ function close()
   else
     vlc.deactivate()
   end
+end
+
+-- With a "menu" capability VLC turns the View entry into a submenu once the
+-- extension is active, so reopening the window never toggles the extension off.
+function menu()
+  return { "Settings" }
+end
+
+function trigger_menu(id)
+  if not dlg then return end
+  dlg:show()
 end
 
 function input_changed()
