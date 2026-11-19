@@ -949,13 +949,33 @@ end
 
 -- With a "menu" capability VLC turns the View entry into a submenu once the
 -- extension is active, so reopening the window never toggles the extension off.
+-- Only the VLC 4 fork has vlc.autostart; on stock VLC the menu is just Settings.
+-- The fork turns a "[x] " or "[ ] " title prefix into a native check mark.
+local function autostart_on()
+  if not vlc.autostart then return false end
+  local ok, list = pcall(vlc.config.get, "lua-extension-autostart")
+  if not (ok and type(list) == "string") then return false end
+  for name in list:gmatch("[^;]+") do
+    if name == "Dual subtitles" then return true end
+  end
+  return false
+end
+
 function menu()
-  return { "Settings" }
+  vlc.msg.dbg("dualsubs menu(): vlc.autostart is " .. type(vlc.autostart))
+  local items = { "Settings" }
+  if vlc.autostart then
+    items[2] = (autostart_on() and "[x] " or "[ ] ") .. "Enabled on start"
+  end
+  return items
 end
 
 function trigger_menu(id)
-  if not dlg then return end
-  dlg:show()
+  if id == 1 then
+    if dlg then dlg:show() end
+  elseif id == 2 and vlc.autostart then
+    pcall(vlc.autostart, not autostart_on())
+  end
 end
 
 function input_changed()
