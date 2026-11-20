@@ -12,7 +12,8 @@
     "watch:ff": "node scripts/watch.js firefox dev",
     "watch:chrome": "node scripts/watch.js chrome dev",
     "build:ja-dict": "node scripts/build-ja-dict.js",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "vlc:copy": "bash ./vlc-dualsubs/copy.sh"
   },
   "devDependencies": {
     "esbuild": "^0.23.0",

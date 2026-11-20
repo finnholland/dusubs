@@ -1,14 +1,16 @@
 --[[
-Dual subtitles: a VLC 3 extension that shows two subtitle tracks stacked in one.
+Dual subtitles: a VLC extension that shows two subtitle tracks stacked in one.
 
 It merges two tracks (external .srt/.ass files beside the video, or embedded
 text tracks extracted with ffmpeg) into one generated ASS file and loads it
 with vlc.input.add_subtitle. The merge logic is a port of merge.go.
 
 Install: copy this file to %APPDATA%\vlc\lua\extensions\ and restart VLC, then
-use View > Dual subtitles. VLC has no way to start an extension by itself, so
-open it once per VLC launch; with Auto-apply ticked it then stays active when
-the window is closed and applies the remembered pair to every video.
+use View > Dual subtitles. The extension stays active when the window is closed
+(View > Dual subtitles > Deactivate turns it off) and, with Auto-apply ticked,
+applies the remembered pair to every video. On a VLC build with vlc.autostart the
+settings window also has an "Enabled on start" checkbox; on other builds open
+the extension once per VLC launch.
 ]]
 
 local core = {} -- pure functions, no VLC calls (tested by test_dualsubs.lua)
@@ -469,8 +471,9 @@ local diag = {} -- what each step did; shown when nothing is found
 function descriptor()
   return {
     title = "Dual subtitles",
-    version = "0.3",
+    version = "0.4",
     author = "dusubs",
+    url = "https://www.dusubs.com",
     shortdesc = "Dual subtitles",
     description = "Show two subtitle tracks stacked in one.",
     capabilities = { "menu", "input-listener" },
@@ -589,6 +592,22 @@ end
 local function tool(name)
   if cfg.ffmpeg_dir ~= "" then return shell_quote(cfg.ffmpeg_dir .. sep() .. name) end
   return name
+end
+
+-- Folder of the first PATH entry that holds the program, or nil. Reads the
+-- file system only, so no process starts and no console flashes.
+local function find_in_path(name)
+  local path = os.getenv("PATH")
+  if not path or path == "" then return nil end
+  local file = windows() and (name .. ".exe") or name
+  for entry in path:gmatch("[^" .. (windows() and ";" or ":") .. "]+") do
+    local dir = strip_trailing((entry:gsub('^"(.*)"$', "%1")))
+    if dir ~= "" then
+      local f = io.open(dir .. sep() .. file, "rb")
+      if f then f:close() return dir end
+    end
+  end
+  return nil
 end
 
 local function read_and_remove(path)
@@ -780,6 +799,20 @@ end
 -- Dialog
 ----------------------------------------------------------------------------
 
+-- Only a VLC build with vlc.autostart can start extensions on launch. Its state
+-- is the "lua-extension-autostart" option, a ';' list of extension names.
+local function autostart_on()
+  local ok, list = pcall(vlc.config.get, "lua-extension-autostart")
+  if not (ok and type(list) == "string") then return false end
+  for name in list:gmatch("[^;]+") do
+    if name == "Dual subtitles" then return true end
+  end
+  return false
+end
+
+-- The folder found on PATH, shown as a suggestion in the ffmpeg field.
+local path_ffmpeg
+
 local function read_settings()
   cfg.top_colour = core.palette[widgets.top_colour:get_value()][2]
   cfg.bottom_colour = core.palette[widgets.bottom_colour:get_value()][2]
@@ -790,7 +823,12 @@ local function read_settings()
   cfg.window = widgets.window:get_checked()
   cfg.shadow = widgets.shadow:get_checked()
   cfg.auto = widgets.auto:get_checked()
-  cfg.ffmpeg_dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+  if widgets.autostart and widgets.autostart:get_checked() ~= autostart_on() then
+    pcall(vlc.autostart, widgets.autostart:get_checked())
+  end
+  local dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+  if dir == path_ffmpeg then dir = "" end -- keep following PATH
+  cfg.ffmpeg_dir = dir
 end
 
 function apply()
@@ -870,9 +908,9 @@ local function activate_body()
   sweep_stale_merged()
   dlg = vlc.dialog("Dual subtitles")
   dlg:add_label("Top line", 1, 1, 1, 1)
-  widgets.top = dlg:add_dropdown(2, 1, 3, 1)
+  widgets.top = dlg:add_dropdown(2, 1, 4, 1)
   dlg:add_label("Bottom line", 1, 2, 1, 1)
-  widgets.bottom = dlg:add_dropdown(2, 2, 3, 1)
+  widgets.bottom = dlg:add_dropdown(2, 2, 4, 1)
 
   -- Sizes are percentages of a base size that scales with the picture height
   -- (ASS PlayResY 1080), so readability does not depend on the video resolution.
@@ -885,13 +923,13 @@ local function activate_body()
   widgets.top_size = dlg:add_dropdown(2, 4, 1, 1)
   add_default_first(widgets.top_size, sizes, cfg.top_scale, "%")
   dlg:add_label("Bottom size", 3, 4, 1, 1)
-  widgets.bottom_size = dlg:add_dropdown(4, 4, 1, 1)
+  widgets.bottom_size = dlg:add_dropdown(4, 4, 2, 1)
   add_default_first(widgets.bottom_size, sizes, cfg.bottom_scale, "%")
 
   dlg:add_label("Top colour", 1, 5, 1, 1)
   widgets.top_colour = dlg:add_dropdown(2, 5, 1, 1)
   dlg:add_label("Bottom colour", 3, 5, 1, 1)
-  widgets.bottom_colour = dlg:add_dropdown(4, 5, 1, 1)
+  widgets.bottom_colour = dlg:add_dropdown(4, 5, 2, 1)
   local function colour_index(c)
     for i, p in ipairs(core.palette) do if p[2] == c then return i end end
     return 1
@@ -907,13 +945,20 @@ local function activate_body()
   widgets.stroke = dlg:add_check_box("Stroke", cfg.stroke, 1, 6, 1, 1)
   widgets.window = dlg:add_check_box("Window", cfg.window, 2, 6, 1, 1)
   widgets.shadow = dlg:add_check_box("Shadow", cfg.shadow, 3, 6, 1, 1)
-  widgets.auto = dlg:add_check_box("Auto-apply", cfg.auto, 4, 6, 1, 1)
+  if vlc.autostart then
+    widgets.autostart = dlg:add_check_box("Load on start", autostart_on(), 4, 6, 2, 1)
+  end
 
   dlg:add_label("ffmpeg folder", 1, 7, 1, 1)
-  widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir, 2, 7, 3, 1)
-  dlg:add_button("Rescan", rescan, 1, 8, 1, 1)
-  dlg:add_button("Apply", apply, 2, 8, 3, 1)
-  widgets.status = dlg:add_label("", 1, 9, 4, 1)
+  path_ffmpeg = find_in_path("ffmpeg")
+  widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir ~= "" and cfg.ffmpeg_dir
+    or path_ffmpeg or "", 2, 7, 4, 1)
+  -- The grid is one table: a column is as wide as its widest widget. Column 5
+  -- holds only the rescan icon, so the icon button stays narrow.
+  dlg:add_button("Apply", apply, 1, 8, 3, 1)
+  widgets.auto = dlg:add_check_box("Auto-apply", cfg.auto, 4, 8, 1, 1)
+  dlg:add_button("Refresh", rescan, 5, 8, 1, 1) -- rescan
+  widgets.status = dlg:add_label("", 1, 9, 5, 1)
   rescan()
   -- opened while a video is already playing: input_changed will not fire for it
   if cfg.auto and #tracks > 0 then apply() end
@@ -935,47 +980,25 @@ function deactivate()
   if dlg then dlg:delete() dlg = nil end
 end
 
--- With auto-apply on, closing the window only hides it: deactivating would
--- stop the extension from seeing the next video.
+-- Closing only hides the window and saves its settings, including "Enabled on
+-- start": deactivating would stop the extension from seeing the next video.
+-- Turn it off from the View menu (Deactivate).
 function close()
-  if dlg and widgets.auto and widgets.auto:get_checked() then
+  if dlg then
     read_settings()
     save_settings()
     dlg:hide()
-  else
-    vlc.deactivate()
   end
 end
 
 -- With a "menu" capability VLC turns the View entry into a submenu once the
 -- extension is active, so reopening the window never toggles the extension off.
--- Only the VLC 4 fork has vlc.autostart; on stock VLC the menu is just Settings.
--- The fork turns a "[x] " or "[ ] " title prefix into a native check mark.
-local function autostart_on()
-  if not vlc.autostart then return false end
-  local ok, list = pcall(vlc.config.get, "lua-extension-autostart")
-  if not (ok and type(list) == "string") then return false end
-  for name in list:gmatch("[^;]+") do
-    if name == "Dual subtitles" then return true end
-  end
-  return false
-end
-
 function menu()
-  vlc.msg.dbg("dualsubs menu(): vlc.autostart is " .. type(vlc.autostart))
-  local items = { "Settings" }
-  if vlc.autostart then
-    items[2] = (autostart_on() and "[x] " or "[ ] ") .. "Enabled on start"
-  end
-  return items
+  return { "Settings" }
 end
 
 function trigger_menu(id)
-  if id == 1 then
-    if dlg then dlg:show() end
-  elseif id == 2 and vlc.autostart then
-    pcall(vlc.autostart, not autostart_on())
-  end
+  if id == 1 and dlg then dlg:show() end
 end
 
 function input_changed()

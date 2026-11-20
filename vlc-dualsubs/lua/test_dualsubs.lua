@@ -110,8 +110,8 @@ eq(table.concat(core.remember_pick(core.defaults(), "und", "").top_prefs, ","), 
 -- Same-language tracks: remembered title wins over track order
 local pt = { { lang = "es", title = "Forced" }, { lang = "es", title = "Latin America" }, { lang = "en", title = "Forced" }, { lang = "en", title = "Full" } }
 eq(core.pick(pt, { "es" }, nil, "Latin America"), 2, "pick by title")
-eq(core.pick(pt, { "es" }, nil, "Gone"), 1, "title missing falls back to first")
-eq(core.pick(pt, { "en" }, nil, ""), 3, "no title keeps first")
+eq(core.pick(pt, { "es" }, nil, "Gone"), 2, "title missing skips forced track")
+eq(core.pick(pt, { "en" }, nil, ""), 4, "no title skips forced track")
 local un = { { lang = "en", title = "Forced" }, { lang = "en", title = "" }, { lang = "en", title = "" }, { lang = "en", title = "SDH" } }
 eq(core.pick(un, { "en" }, nil, "", 2), 2, "untitled: position 2")
 eq(core.pick(un, { "en" }, nil, "", 3), 3, "untitled: position 3")
