@@ -3,7 +3,8 @@
 A browser extension that overlays annotated Chinese and Japanese subtitles on YouTube and Bilibili, paired with a companion web app for spaced-repetition flashcard review.
 
 **Extension** → [addons.mozilla.org/firefox/addon/dusubs](https://addons.mozilla.org/firefox/addon/dusubs/)  
-**Web app** → [dusubs.com](https://www.dusubs.com)
+**Web app** → [dusubs.com](https://www.dusubs.com)  
+**VLC extension** → [Download `dualsubs.lua`](https://github.com/finnholland/dusubs/releases?q=vlc-v&expanded=true) (place in VLC's `lua/extensions/` folder)
 
 ---
 
