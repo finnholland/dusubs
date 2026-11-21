@@ -107,6 +107,19 @@ eq(table.concat(pref.top_prefs, ","), "en,zh,ja,es", "top pref moved to front")
 eq(table.concat(pref.bottom_prefs, ","), "es,en", "bottom pref moved to front")
 eq(table.concat(core.remember_pick(core.defaults(), "und", "").top_prefs, ","), "zh,ja,es", "und and empty skipped")
 
+-- Same-language tracks: remembered title wins over track order
+local pt = { { lang = "es", title = "Forced" }, { lang = "es", title = "Latin America" }, { lang = "en", title = "Forced" }, { lang = "en", title = "Full" } }
+eq(core.pick(pt, { "es" }, nil, "Latin America"), 2, "pick by title")
+eq(core.pick(pt, { "es" }, nil, "Gone"), 2, "title missing skips forced track")
+eq(core.pick(pt, { "en" }, nil, ""), 4, "no title skips forced track")
+local un = { { lang = "en", title = "Forced" }, { lang = "en", title = "" }, { lang = "en", title = "" }, { lang = "en", title = "SDH" } }
+eq(core.pick(un, { "en" }, nil, "", 2), 2, "untitled: position 2")
+eq(core.pick(un, { "en" }, nil, "", 3), 3, "untitled: position 3")
+eq(core.lang_ordinal(un, un[3]), 3, "ordinal")
+local tp = core.remember_pick(core.defaults(), "es", "en", "Latin America", "Full")
+local tl = core.parse_settings(core.serialize_settings(tp), core.defaults())
+eq(tl.top_title .. "|" .. tl.bottom_title, "Latin America|Full", "titles round trip")
+
 -- Byte-for-byte parity with the Go implementation
 local dir = arg and arg[1]
 if dir then

@@ -1,12 +1,16 @@
 --[[
-Dual subtitles: a VLC 3 extension that shows two subtitle tracks stacked in one.
+Dual subtitles: a VLC extension that shows two subtitle tracks stacked in one.
 
 It merges two tracks (external .srt/.ass files beside the video, or embedded
 text tracks extracted with ffmpeg) into one generated ASS file and loads it
 with vlc.input.add_subtitle. The merge logic is a port of merge.go.
 
 Install: copy this file to %APPDATA%\vlc\lua\extensions\ and restart VLC, then
-use View > Dual subtitles.
+use View > Dual subtitles. The extension stays active when the window is closed
+(View > Dual subtitles > Deactivate turns it off) and, with Auto-apply ticked,
+applies the remembered pair to every video. On a VLC build with vlc.autostart the
+settings window also has an "Enabled on start" checkbox; on other builds open
+the extension once per VLC launch.
 ]]
 
 local core = {} -- pure functions, no VLC calls (tested by test_dualsubs.lua)
@@ -27,6 +31,10 @@ function core.defaults()
   return {
     top_prefs = { "zh", "ja", "es" },
     bottom_prefs = { "en" },
+    top_title = "", -- title of the last picked track, tells apart tracks of one language
+    bottom_title = "",
+    top_nth = 0, -- position among the tracks of the same language, for tracks without a title
+    bottom_nth = 0,
     top_colour = "&H00FFFFFF",
     bottom_colour = "&H007AE9FF",
     font = "Arial",
@@ -41,6 +49,7 @@ function core.defaults()
     stroke = true,
     window = false,
     shadow = false,
+    auto = false, -- apply the remembered pair to every video that starts
   }
 end
 
@@ -340,21 +349,48 @@ function core.labels(tracks)
   return out
 end
 
+-- Position of track `t` among the tracks of its language (1-based).
+function core.lang_ordinal(tracks, t)
+  local want, n = core.norm_lang(t.lang), 0
+  for _, x in ipairs(tracks) do
+    if core.norm_lang(x.lang) == want then n = n + 1 end
+    if x == t then return n end
+  end
+  return 0
+end
+
 -- First track matching the preferred languages in order, never `exclude`.
-function core.pick(tracks, prefs, exclude)
+-- Among tracks of one language, a remembered title (worth 2) and a remembered
+-- position within the language (worth 1) pick the best one; ties go to the first.
+function core.pick(tracks, prefs, exclude, title, nth)
+  local remembered = (title and title ~= "") or (nth and nth > 0)
   for _, p in ipairs(prefs) do
     local want = core.norm_lang(p)
+    local best, best_score, k = nil, -1, 0
     for i, t in ipairs(tracks) do
-      if i ~= exclude and core.norm_lang(t.lang) == want then return i end
+      if core.norm_lang(t.lang) == want then
+        k = k + 1
+        if i ~= exclude then
+          local score = 0
+          if remembered then
+            if (t.title or "") == (title or "") then score = score + 2 end
+            if k == nth then score = score + 1 end
+          end
+          -- with nothing better known, avoid forced-only tracks
+          if score < 2 and (t.title or ""):lower():find("forced", 1, true) then score = score - 0.5 end
+          if score > best_score then best, best_score = i, score end
+        end
+      end
     end
+    if best then return best end
   end
 end
 
 -- Settings file: key=value lines.
 local number_keys = {
-  font_scale = { 50, 200 }, sub_position = { 0, 40 }, top_scale = { 50, 200 }, bottom_scale = { 50, 200 },
+  font_scale = { 50, 200 }, sub_position = { 0, 40 }, top_nth = { 0, 1000 }, bottom_nth = { 0, 1000 }, top_scale = { 50, 200 }, bottom_scale = { 50, 200 },
 }
-local bool_keys = { "stroke", "window", "shadow" }
+local bool_keys = { "stroke", "window", "shadow", "auto" }
 local colour_keys = { "top_colour", "bottom_colour" }
 local list_keys = { "top_prefs", "bottom_prefs" }
 
@@ -365,6 +401,8 @@ function core.serialize_settings(cfg)
   for _, k in ipairs(colour_keys) do out[#out + 1] = k .. "=" .. cfg[k] end
   for _, k in ipairs(list_keys) do out[#out + 1] = k .. "=" .. table.concat(cfg[k], ",") end
   out[#out + 1] = "ffmpeg_dir=" .. cfg.ffmpeg_dir
+  out[#out + 1] = "top_title=" .. (cfg.top_title or ""):gsub("[\r\n]", " ")
+  out[#out + 1] = "bottom_title=" .. (cfg.bottom_title or ""):gsub("[\r\n]", " ")
   table.sort(out)
   return table.concat(out, "\n") .. "\n"
 end
@@ -377,7 +415,7 @@ function core.parse_settings(text, cfg)
       if number_keys[k] then
         local n = tonumber(v)
         if n and n >= number_keys[k][1] and n <= number_keys[k][2] then cfg[k] = math.floor(n) end
-      elseif k == "stroke" or k == "window" or k == "shadow" then
+      elseif k == "stroke" or k == "window" or k == "shadow" or k == "auto" then
         cfg[k] = v == "1"
       elseif k == "top_colour" or k == "bottom_colour" then
         if v:match("^&H%x%x%x%x%x%x%x%x$") then cfg[k] = v end
@@ -387,6 +425,8 @@ function core.parse_settings(text, cfg)
         if #list > 0 then cfg[k] = list end
       elseif k == "ffmpeg_dir" then
         cfg.ffmpeg_dir = v
+      elseif k == "top_title" or k == "bottom_title" then
+        cfg[k] = v
       end
     end
   end
@@ -403,7 +443,9 @@ local function with_first(list, lang)
 end
 
 -- Makes the languages of a picked pair the preferred ones next time.
-function core.remember_pick(cfg, top_lang, bottom_lang)
+function core.remember_pick(cfg, top_lang, bottom_lang, top_title, bottom_title, top_nth, bottom_nth)
+  cfg.top_nth, cfg.bottom_nth = top_nth or 0, bottom_nth or 0
+  cfg.top_title, cfg.bottom_title = top_title or "", bottom_title or ""
   local t, b = core.norm_lang(top_lang), core.norm_lang(bottom_lang)
   if t ~= "" and t ~= "und" then cfg.top_prefs = with_first(cfg.top_prefs, t) end
   if b ~= "" and b ~= "und" then cfg.bottom_prefs = with_first(cfg.bottom_prefs, b) end
@@ -429,11 +471,12 @@ local diag = {} -- what each step did; shown when nothing is found
 function descriptor()
   return {
     title = "Dual subtitles",
-    version = "0.3",
+    version = "0.4",
     author = "dusubs",
+    url = "https://www.dusubs.com",
     shortdesc = "Dual subtitles",
     description = "Show two subtitle tracks stacked in one.",
-    capabilities = { "input-listener" },
+    capabilities = { "menu", "input-listener" },
   }
 end
 
@@ -551,6 +594,22 @@ local function tool(name)
   return name
 end
 
+-- Folder of the first PATH entry that holds the program, or nil. Reads the
+-- file system only, so no process starts and no console flashes.
+local function find_in_path(name)
+  local path = os.getenv("PATH")
+  if not path or path == "" then return nil end
+  local file = windows() and (name .. ".exe") or name
+  for entry in path:gmatch("[^" .. (windows() and ";" or ":") .. "]+") do
+    local dir = strip_trailing((entry:gsub('^"(.*)"$', "%1")))
+    if dir ~= "" then
+      local f = io.open(dir .. sep() .. file, "rb")
+      if f then f:close() return dir end
+    end
+  end
+  return nil
+end
+
 local function read_and_remove(path)
   local out = read_file(path)
   remove_file(path)
@@ -597,8 +656,58 @@ local function set_status(text)
   if dlg then dlg:update() end
 end
 
+-- VLC 4 replaced vlc.input with vlc.player.
+local function current_item()
+  if vlc.input and vlc.input.item then return vlc.input.item() end
+  return vlc.player.item()
+end
+
+local function spu_ids()
+  local ids = {}
+  local ok, list = pcall(vlc.player.get_spu_tracks)
+  if ok and type(list) == "table" then
+    for _, t in pairs(list) do
+      if type(t) == "table" and t.id then ids[t.id] = t end
+    end
+  end
+  return ids
+end
+
+-- vlc.misc is missing from extensions in VLC 4, so wait by spinning on the
+-- clock (extensions run on their own thread, the player is not blocked).
+local function pause(seconds)
+  if vlc.misc and vlc.misc.mwait then
+    vlc.misc.mwait(vlc.misc.mdate() + seconds * 1000000)
+    return
+  end
+  local t = os.clock()
+  while os.clock() - t < seconds do end
+end
+
+-- VLC 4 adds the track asynchronously and does not always select it, so wait
+-- for the new track to appear and toggle it on.
+local function select_new_track(before)
+  for _ = 1, 60 do
+    for id, t in pairs(spu_ids()) do
+      if not before[id] then
+        if not t.selected then pcall(vlc.player.toggle_spu_track, id) end
+        return
+      end
+    end
+    pause(0.05)
+  end
+end
+
+local function add_subtitle(path)
+  if vlc.input and vlc.input.add_subtitle then return vlc.input.add_subtitle(path, true) end
+  local before = spu_ids()
+  local r = vlc.player.add_subtitle(path, true)
+  pcall(select_new_track, before)
+  return r
+end
+
 local function media_path()
-  local item = vlc.input.item()
+  local item = current_item()
   if not item then return nil end
   local uri = item:uri()
   if not uri:match("^file:///") then return nil end
@@ -690,6 +799,20 @@ end
 -- Dialog
 ----------------------------------------------------------------------------
 
+-- Only a VLC build with vlc.autostart can start extensions on launch. Its state
+-- is the "lua-extension-autostart" option, a ';' list of extension names.
+local function autostart_on()
+  local ok, list = pcall(vlc.config.get, "lua-extension-autostart")
+  if not (ok and type(list) == "string") then return false end
+  for name in list:gmatch("[^;]+") do
+    if name == "Dual subtitles" then return true end
+  end
+  return false
+end
+
+-- The folder found on PATH, shown as a suggestion in the ffmpeg field.
+local path_ffmpeg
+
 local function read_settings()
   cfg.top_colour = core.palette[widgets.top_colour:get_value()][2]
   cfg.bottom_colour = core.palette[widgets.bottom_colour:get_value()][2]
@@ -699,7 +822,13 @@ local function read_settings()
   cfg.stroke = widgets.stroke:get_checked()
   cfg.window = widgets.window:get_checked()
   cfg.shadow = widgets.shadow:get_checked()
-  cfg.ffmpeg_dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+  cfg.auto = widgets.auto:get_checked()
+  if widgets.autostart and widgets.autostart:get_checked() ~= autostart_on() then
+    pcall(vlc.autostart, widgets.autostart:get_checked())
+  end
+  local dir = ((widgets.ffmpeg:get_text() or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+  if dir == path_ffmpeg then dir = "" end -- keep following PATH
+  cfg.ffmpeg_dir = dir
 end
 
 function apply()
@@ -727,12 +856,13 @@ function apply()
   local ass = core.merge(te, be, core.norm_lang(top.lang), core.norm_lang(bottom.lang), cfg)
   local path = temp_dir() .. sep() .. "dualsubs-" .. core.hash(ass) .. ".ass"
   if not write_file(path, ass) then set_status("Cannot write " .. path) return end
-  local ok, e = pcall(vlc.input.add_subtitle, path, true)
+  local ok, e = pcall(add_subtitle, path)
   if not ok then set_status("VLC refused the subtitle: " .. tostring(e)) return end
   merged_files[#merged_files + 1] = path
   clear_merged(path)
 
-  core.remember_pick(cfg, top.lang, bottom.lang)
+  core.remember_pick(cfg, top.lang, bottom.lang, top.title, bottom.title,
+    core.lang_ordinal(tracks, top), core.lang_ordinal(tracks, bottom))
   save_settings()
   set_status("Applied.")
 end
@@ -748,8 +878,8 @@ end
 
 local function fill_tracks()
   local labels = core.labels(tracks)
-  local ti = core.pick(tracks, cfg.top_prefs)
-  local bi = core.pick(tracks, cfg.bottom_prefs, ti)
+  local ti = core.pick(tracks, cfg.top_prefs, nil, cfg.top_title, cfg.top_nth)
+  local bi = core.pick(tracks, cfg.bottom_prefs, ti, cfg.bottom_title, cfg.bottom_nth)
   -- ids stay the real track numbers; the preferred track is listed first
   local function fill(w, first)
     w:clear()
@@ -773,14 +903,14 @@ function rescan()
   fill_tracks()
 end
 
-function activate()
+local function activate_body()
   load_settings()
   sweep_stale_merged()
   dlg = vlc.dialog("Dual subtitles")
   dlg:add_label("Top line", 1, 1, 1, 1)
-  widgets.top = dlg:add_dropdown(2, 1, 3, 1)
+  widgets.top = dlg:add_dropdown(2, 1, 4, 1)
   dlg:add_label("Bottom line", 1, 2, 1, 1)
-  widgets.bottom = dlg:add_dropdown(2, 2, 3, 1)
+  widgets.bottom = dlg:add_dropdown(2, 2, 4, 1)
 
   -- Sizes are percentages of a base size that scales with the picture height
   -- (ASS PlayResY 1080), so readability does not depend on the video resolution.
@@ -793,13 +923,13 @@ function activate()
   widgets.top_size = dlg:add_dropdown(2, 4, 1, 1)
   add_default_first(widgets.top_size, sizes, cfg.top_scale, "%")
   dlg:add_label("Bottom size", 3, 4, 1, 1)
-  widgets.bottom_size = dlg:add_dropdown(4, 4, 1, 1)
+  widgets.bottom_size = dlg:add_dropdown(4, 4, 2, 1)
   add_default_first(widgets.bottom_size, sizes, cfg.bottom_scale, "%")
 
   dlg:add_label("Top colour", 1, 5, 1, 1)
   widgets.top_colour = dlg:add_dropdown(2, 5, 1, 1)
   dlg:add_label("Bottom colour", 3, 5, 1, 1)
-  widgets.bottom_colour = dlg:add_dropdown(4, 5, 1, 1)
+  widgets.bottom_colour = dlg:add_dropdown(4, 5, 2, 1)
   local function colour_index(c)
     for i, p in ipairs(core.palette) do if p[2] == c then return i end end
     return 1
@@ -815,13 +945,34 @@ function activate()
   widgets.stroke = dlg:add_check_box("Stroke", cfg.stroke, 1, 6, 1, 1)
   widgets.window = dlg:add_check_box("Window", cfg.window, 2, 6, 1, 1)
   widgets.shadow = dlg:add_check_box("Shadow", cfg.shadow, 3, 6, 1, 1)
+  if vlc.autostart then
+    widgets.autostart = dlg:add_check_box("Load on start", autostart_on(), 4, 6, 2, 1)
+  end
 
   dlg:add_label("ffmpeg folder", 1, 7, 1, 1)
-  widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir, 2, 7, 3, 1)
-  dlg:add_button("Rescan", rescan, 1, 8, 1, 1)
-  dlg:add_button("Apply", apply, 2, 8, 3, 1)
-  widgets.status = dlg:add_label("", 1, 9, 4, 1)
+  path_ffmpeg = find_in_path("ffmpeg")
+  widgets.ffmpeg = dlg:add_text_input(cfg.ffmpeg_dir ~= "" and cfg.ffmpeg_dir
+    or path_ffmpeg or "", 2, 7, 4, 1)
+  -- The grid is one table: a column is as wide as its widest widget. Column 5
+  -- holds only the rescan icon, so the icon button stays narrow.
+  dlg:add_button("Apply", apply, 1, 8, 3, 1)
+  widgets.auto = dlg:add_check_box("Auto-apply", cfg.auto, 4, 8, 1, 1)
+  dlg:add_button("Refresh", rescan, 5, 8, 1, 1) -- rescan
+  widgets.status = dlg:add_label("", 1, 9, 5, 1)
   rescan()
+  -- opened while a video is already playing: input_changed will not fire for it
+  if cfg.auto and #tracks > 0 then apply() end
+end
+
+-- Errors inside activate are swallowed silently by VLC 4's extension loader,
+-- so log them (Tools > Messages) and show them in a dialog.
+function activate()
+  local ok, err = xpcall(activate_body, debug and debug.traceback or tostring)
+  if not ok then
+    vlc.msg.err("dualsubs activate failed: " .. tostring(err))
+    if not dlg then dlg = vlc.dialog("Dual subtitles") end
+    dlg:add_label("Error: " .. tostring(err):sub(1, 300), 1, 1, 1, 1)
+  end
 end
 
 function deactivate()
@@ -829,9 +980,30 @@ function deactivate()
   if dlg then dlg:delete() dlg = nil end
 end
 
-function close() vlc.deactivate() end
+-- Closing only hides the window and saves its settings, including "Enabled on
+-- start": deactivating would stop the extension from seeing the next video.
+-- Turn it off from the View menu (Deactivate).
+function close()
+  if dlg then
+    read_settings()
+    save_settings()
+    dlg:hide()
+  end
+end
+
+-- With a "menu" capability VLC turns the View entry into a submenu once the
+-- extension is active, so reopening the window never toggles the extension off.
+function menu()
+  return { "Settings" }
+end
+
+function trigger_menu(id)
+  if id == 1 and dlg then dlg:show() end
+end
 
 function input_changed()
   clear_merged() -- the merged file belongs to the previous video
-  if dlg then rescan() end
+  if not dlg then return end
+  rescan()
+  if widgets.auto:get_checked() and #tracks > 0 then apply() end
 end
