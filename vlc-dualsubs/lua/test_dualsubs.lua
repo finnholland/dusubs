@@ -120,6 +120,37 @@ local tp = core.remember_pick(core.defaults(), "es", "en", "Latin America", "Ful
 local tl = core.parse_settings(core.serialize_settings(tp), core.defaults())
 eq(tl.top_title .. "|" .. tl.bottom_title, "Latin America|Full", "titles round trip")
 
+-- A line switched off: nil language flags it, keeps its other settings, and round-trips
+local off = core.remember_pick(core.defaults(), nil, "en", nil, "Full", nil, 2)
+eq(off.top_off, true, "top off flagged")
+eq(off.bottom_off, false, "bottom on")
+eq(table.concat(off.top_prefs, ","), "zh,ja,es", "off line keeps prefs")
+eq(core.parse_settings(core.serialize_settings(off), core.defaults()).top_off, true, "off round trip")
+eq(core.remember_pick(off, "zh", "en").top_off, false, "off cleared on next pick")
+
+-- Merge with one track empty shows only the other
+local one = core.merge({}, core.parse_srt("1\n00:00:01,000 --> 00:00:02,000\nHello\n"), "", "en", core.defaults())
+eq(one:find("Hello", 1, true) ~= nil, true, "single track shown")
+eq(select(2, one:gsub("Dialogue:", "")), 1, "single track one event")
+
+-- Stops of overlapping cues up to 0.7s apart end together (bandidos S01E02)
+local en = core.parse_srt("1\n00:08:56,375 --> 00:08:58,541\nI'm an idiot\n")
+local es = core.parse_srt("1\n00:08:56,416 --> 00:08:59,083\nQue pendejo\n")
+local snapped = core.merge(en, es, "en", "es", core.defaults())
+eq(select(2, snapped:gsub("Dialogue:", "")), 1, "stops within 0.7s share one block")
+-- but stops further apart, or of cues that do not overlap, are left alone
+local far = core.parse_srt("1\n00:00:01,000 --> 00:00:02,000\nA\n")
+local later = core.parse_srt("1\n00:00:02,300 --> 00:00:03,000\nB\n")
+eq(select(2, core.merge(far, later, "en", "es", core.defaults()):gsub("Dialogue:", "")), 2, "non-overlapping cues stay apart")
+
+-- Cues that end together start together, even 1.1s apart (bandidos S01E02, "For Spanish audio" track)
+local en2 = core.parse_srt("1\n00:08:57,500 --> 00:08:59,083\nI'm an idiot.\n")
+eq(select(2, core.merge(en2, es, "en", "es", core.defaults()):gsub("Dialogue:", "")), 1, "same-end cues share one block")
+-- but not when the later cue would overlap an earlier cue of its own track
+local ta = core.parse_srt("1\n00:00:01,000 --> 00:00:03,000\nA\n")
+local tb = core.parse_srt("1\n00:00:01,000 --> 00:00:02,000\nB1\n\n2\n00:00:02,000 --> 00:00:03,000\nB2\n")
+eq(select(2, core.merge(ta, tb, "en", "es", core.defaults()):gsub("Dialogue:", "")), 2, "start snap keeps own track cues apart")
+
 -- Byte-for-byte parity with the Go implementation
 local dir = arg and arg[1]
 if dir then

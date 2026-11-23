@@ -31,6 +31,8 @@ function core.defaults()
   return {
     top_prefs = { "zh", "ja", "es" },
     bottom_prefs = { "en" },
+    top_off = false, -- line switched off: only the other track is shown
+    bottom_off = false,
     top_title = "", -- title of the last picked track, tells apart tracks of one language
     bottom_title = "",
     top_nth = 0, -- position among the tracks of the same language, for tracks without a title
@@ -228,19 +230,111 @@ local function sorted_by_start(events)
   return out
 end
 
-local function active(events, t)
-  local texts = {}
-  for _, e in ipairs(events) do
-    if e.start > t then break end -- sorted by start
-    if t < e.stop then texts[#texts + 1] = e.text end
+-- Returns a function giving the text on screen at time t, in start order.
+-- Must be called with non-decreasing t: it sweeps once over the sorted events
+-- and keeps only the cues still showing, instead of rescanning from the start.
+local function active_sweep(events)
+  local nxt, live = 1, {}
+  return function(t)
+    while events[nxt] and events[nxt].start <= t do
+      live[#live + 1] = events[nxt]
+      nxt = nxt + 1
+    end
+    local kept, texts = {}, {}
+    for _, e in ipairs(live) do
+      if t < e.stop then
+        kept[#kept + 1] = e
+        texts[#texts + 1] = e.text
+      end
+    end
+    live = kept
+    return table.concat(texts, "\\N")
   end
-  return table.concat(texts, "\\N")
+end
+
+-- Cue times of the two tracks that differ by a few centiseconds would show one
+-- line alone for that gap. Times within SNAP_CS of each other count as one.
+core.SNAP_CS = 20
+
+-- Copy of `events` with each start/stop moved to the earliest time within
+-- SNAP_CS of it among the times of both tracks. A cue that would shrink to
+-- nothing keeps its own times.
+local function snap_events(events, other)
+  local times, seen = {}, {}
+  for _, list in ipairs({ events, other }) do
+    for _, e in ipairs(list) do
+      for _, p in ipairs({ e.start, e.stop }) do
+        if not seen[p] then seen[p] = true times[#times + 1] = p end
+      end
+    end
+  end
+  table.sort(times)
+  local snap, base = {}, nil
+  for _, p in ipairs(times) do
+    if not base or p - base > core.SNAP_CS then base = p end
+    snap[p] = base
+  end
+  local out = {}
+  for i, e in ipairs(events) do
+    local s, t = snap[e.start], snap[e.stop]
+    if t <= s then s, t = e.start, e.stop end
+    out[i] = { start = s, stop = t, text = e.text }
+  end
+  return out
+end
+
+-- Translations are cut differently, so the same line can start and end at
+-- noticeably different times in each track. A cue that overlaps exactly one
+-- cue of the other track, which overlaps only it back, is the same line. Both
+-- then show from the earlier start to the later stop. The shorter cue must be
+-- at least 80% covered by the longer one, and neither time may move more than
+-- PAIR_MAX_CS, so a stray cue is not stretched over an unrelated one.
+core.PAIR_MAX_CS = 200
+
+-- For each cue of `a`, the indices of the cues of `b` that overlap it enough.
+local function overlaps(a, b)
+  local out, lo = {}, 1
+  for i, e in ipairs(a) do
+    out[i] = {}
+    while b[lo] and b[lo].stop <= e.start do lo = lo + 1 end
+    for j = lo, #b do
+      local o = b[j]
+      if o.start >= e.stop then break end
+      local shared = math.min(e.stop, o.stop) - math.max(e.start, o.start)
+      local shorter = math.min(e.stop - e.start, o.stop - o.start)
+      if shared > 0 and shared * 5 >= shorter * 4 then out[i][#out[i] + 1] = j end
+    end
+  end
+  return out
+end
+
+-- Both lists must be sorted by start. Returns adjusted copies.
+local function pair_cues(top, bottom)
+  local tb, bt = overlaps(top, bottom), overlaps(bottom, top)
+  local ot, ob = {}, {}
+  for i, e in ipairs(top) do ot[i] = { start = e.start, stop = e.stop, text = e.text } end
+  for j, e in ipairs(bottom) do ob[j] = { start = e.start, stop = e.stop, text = e.text } end
+  for i, js in ipairs(tb) do
+    local j = js[1]
+    if #js == 1 and #bt[j] == 1 and bt[j][1] == i then
+      local a, b = top[i], bottom[j]
+      local s, t = math.min(a.start, b.start), math.max(a.stop, b.stop)
+      if math.max(a.start - s, b.start - s, t - a.stop, t - b.stop) <= core.PAIR_MAX_CS then
+        ot[i].start, ot[i].stop, ob[j].start, ob[j].stop = s, t, s, t
+      end
+    end
+  end
+  return ot, ob
 end
 
 -- One ASS file with both tracks in a single bottom-centre block: the top
 -- track's line sits above the bottom track's, and the block changes whenever
 -- either track changes. Takes parsed events.
 function core.merge(top, bottom, top_lang, bottom_lang, cfg)
+  top, bottom = sorted_by_start(top), sorted_by_start(bottom)
+  top, bottom = snap_events(top, bottom), snap_events(bottom, top)
+  top, bottom = sorted_by_start(top), sorted_by_start(bottom)
+  top, bottom = pair_cues(top, bottom)
   top, bottom = sorted_by_start(top), sorted_by_start(bottom)
   local set, points = {}, {}
   for _, list in ipairs({ top, bottom }) do
@@ -261,9 +355,10 @@ function core.merge(top, bottom, top_lang, bottom_lang, cfg)
   }
   local top_tag = style_tag(cfg.top_colour, top_lang, cfg, cfg.top_scale)
   local bot_tag = style_tag(cfg.bottom_colour, bottom_lang, cfg, cfg.bottom_scale)
+  local top_at, bottom_at = active_sweep(top), active_sweep(bottom)
   for i = 1, #points - 1 do
     local from, to = points[i], points[i + 1]
-    local t, b = active(top, from), active(bottom, from)
+    local t, b = top_at(from), bottom_at(from)
     if t ~= "" or b ~= "" then
       local text
       if t ~= "" and b ~= "" then
@@ -390,7 +485,7 @@ end
 local number_keys = {
   font_scale = { 50, 200 }, sub_position = { 0, 40 }, top_nth = { 0, 1000 }, bottom_nth = { 0, 1000 }, top_scale = { 50, 200 }, bottom_scale = { 50, 200 },
 }
-local bool_keys = { "stroke", "window", "shadow", "auto" }
+local bool_keys = { "stroke", "window", "shadow", "auto", "top_off", "bottom_off" }
 local colour_keys = { "top_colour", "bottom_colour" }
 local list_keys = { "top_prefs", "bottom_prefs" }
 
@@ -415,7 +510,7 @@ function core.parse_settings(text, cfg)
       if number_keys[k] then
         local n = tonumber(v)
         if n and n >= number_keys[k][1] and n <= number_keys[k][2] then cfg[k] = math.floor(n) end
-      elseif k == "stroke" or k == "window" or k == "shadow" or k == "auto" then
+      elseif k == "stroke" or k == "window" or k == "shadow" or k == "auto" or k == "top_off" or k == "bottom_off" then
         cfg[k] = v == "1"
       elseif k == "top_colour" or k == "bottom_colour" then
         if v:match("^&H%x%x%x%x%x%x%x%x$") then cfg[k] = v end
@@ -442,13 +537,20 @@ local function with_first(list, lang)
   return out
 end
 
--- Makes the languages of a picked pair the preferred ones next time.
+-- Makes the languages of a picked pair the preferred ones next time. A nil
+-- language means that line is off: it is flagged and its other settings stay.
 function core.remember_pick(cfg, top_lang, bottom_lang, top_title, bottom_title, top_nth, bottom_nth)
-  cfg.top_nth, cfg.bottom_nth = top_nth or 0, bottom_nth or 0
-  cfg.top_title, cfg.bottom_title = top_title or "", bottom_title or ""
-  local t, b = core.norm_lang(top_lang), core.norm_lang(bottom_lang)
-  if t ~= "" and t ~= "und" then cfg.top_prefs = with_first(cfg.top_prefs, t) end
-  if b ~= "" and b ~= "und" then cfg.bottom_prefs = with_first(cfg.bottom_prefs, b) end
+  cfg.top_off, cfg.bottom_off = top_lang == nil, bottom_lang == nil
+  if top_lang then
+    cfg.top_nth, cfg.top_title = top_nth or 0, top_title or ""
+    local t = core.norm_lang(top_lang)
+    if t ~= "" and t ~= "und" then cfg.top_prefs = with_first(cfg.top_prefs, t) end
+  end
+  if bottom_lang then
+    cfg.bottom_nth, cfg.bottom_title = bottom_nth or 0, bottom_title or ""
+    local b = core.norm_lang(bottom_lang)
+    if b ~= "" and b ~= "und" then cfg.bottom_prefs = with_first(cfg.bottom_prefs, b) end
+  end
   return cfg
 end
 
@@ -722,13 +824,24 @@ local function media_key()
 end
 
 -- ffprobe output for the video, from the cache when possible.
+-- Every ffprobe launch flashes a console, so the outcome is always remembered:
+-- on disk when ffprobe ran fine (an empty result means "no embedded subtitles"),
+-- in memory for the session when it failed (e.g. ffprobe not found).
+local probe_failed = {}
+
 local function probe()
-  local cached = cache_dir() .. sep() .. "probe-" .. media_key() .. ".txt"
+  local key = media_key()
+  local cached = cache_dir() .. sep() .. "probe-" .. key .. ".txt"
   local out = read_file(cached)
-  if out and out ~= "" then return out end
+  if out then return out end
+  if probe_failed[key] then return nil end
   set_status("Reading tracks with ffprobe...")
   out = run(tool("ffprobe") .. " -v error -select_streams s -show_entries stream=codec_name:stream_tags=language,title -of compact=p=0 " .. shell_quote(media))
-  if out and out:find("codec_name=", 1, true) then write_file(cached, out) end
+  if out and (out:find("codec_name=", 1, true) or out:match("^%s*$")) then
+    write_file(cached, out)
+  else
+    probe_failed[key] = true
+  end
   return out
 end
 
@@ -831,17 +944,22 @@ local function read_settings()
   cfg.ffmpeg_dir = dir
 end
 
+-- Dropdown value of the "Off" entry. Not 0: VLC reads id 0 back unreliably.
+local OFF = 9999
+
 function apply()
   read_settings()
   local ti, bi = widgets.top:get_value(), widgets.bottom:get_value()
+  -- the OFF entry: that line stays empty
   local top, bottom = tracks[ti], tracks[bi]
-  if not top or not bottom then set_status("Pick two tracks first.") return end
+  if (ti ~= OFF and not top) or (bi ~= OFF and not bottom) then set_status("Pick two tracks first.") return end
+  if ti == OFF and bi == OFF then set_status("Pick at least one track.") return end
   if ti == bi then set_status("Pick two different tracks.") return end
   diag = {}
 
   local embedded = {}
-  for _, t in ipairs({ top, bottom }) do
-    if t.kind == "embedded" then embedded[#embedded + 1] = t end
+  for _, t in ipairs({ top or false, bottom or false }) do -- false, not nil: ipairs stops at nil
+    if t and t.kind == "embedded" then embedded[#embedded + 1] = t end
   end
   if #embedded > 0 then
     local ok, err = extract(embedded)
@@ -849,11 +967,13 @@ function apply()
   end
 
   set_status("Merging...")
-  local te, err = events_for(top)
+  local te, err = {}, nil
+  if top then te, err = events_for(top) end
   if not te then set_status(err) return end
-  local be, err2 = events_for(bottom)
+  local be, err2 = {}, nil
+  if bottom then be, err2 = events_for(bottom) end
   if not be then set_status(err2) return end
-  local ass = core.merge(te, be, core.norm_lang(top.lang), core.norm_lang(bottom.lang), cfg)
+  local ass = core.merge(te, be, core.norm_lang(top and top.lang or ""), core.norm_lang(bottom and bottom.lang or ""), cfg)
   local path = temp_dir() .. sep() .. "dualsubs-" .. core.hash(ass) .. ".ass"
   if not write_file(path, ass) then set_status("Cannot write " .. path) return end
   local ok, e = pcall(add_subtitle, path)
@@ -861,8 +981,8 @@ function apply()
   merged_files[#merged_files + 1] = path
   clear_merged(path)
 
-  core.remember_pick(cfg, top.lang, bottom.lang, top.title, bottom.title,
-    core.lang_ordinal(tracks, top), core.lang_ordinal(tracks, bottom))
+  core.remember_pick(cfg, top and top.lang, bottom and bottom.lang, top and top.title, bottom and bottom.title,
+    top and core.lang_ordinal(tracks, top), bottom and core.lang_ordinal(tracks, bottom))
   save_settings()
   set_status("Applied.")
 end
@@ -878,18 +998,20 @@ end
 
 local function fill_tracks()
   local labels = core.labels(tracks)
-  local ti = core.pick(tracks, cfg.top_prefs, nil, cfg.top_title, cfg.top_nth)
-  local bi = core.pick(tracks, cfg.bottom_prefs, ti, cfg.bottom_title, cfg.bottom_nth)
-  -- ids stay the real track numbers; the preferred track is listed first
-  local function fill(w, first)
+  local ti = not cfg.top_off and core.pick(tracks, cfg.top_prefs, nil, cfg.top_title, cfg.top_nth) or nil
+  local bi = not cfg.bottom_off and core.pick(tracks, cfg.bottom_prefs, ti, cfg.bottom_title, cfg.bottom_nth) or nil
+  -- ids stay the real track numbers; the preferred track (or Off) is listed first
+  local function fill(w, first, off)
     w:clear()
+    if off then w:add_value("Off", OFF) end
     if first then w:add_value(labels[first], first) end
     for i, label in ipairs(labels) do
       if i ~= first then w:add_value(label, i) end
     end
+    if not off then w:add_value("Off", OFF) end
   end
-  fill(widgets.top, ti)
-  fill(widgets.bottom, bi)
+  fill(widgets.top, ti, cfg.top_off)
+  fill(widgets.bottom, bi, cfg.bottom_off)
   if #tracks == 0 then
     set_status(media and ("Nothing found. " .. table.concat(diag, " | "))
       or "Play a local video first (a local file), then press Rescan.")
